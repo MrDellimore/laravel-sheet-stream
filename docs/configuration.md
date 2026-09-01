@@ -16,8 +16,16 @@ return [
     'chunk_size'     => 1000,
     'temp_path'      => null,
     'dates' => [
-        'coerce'   => true,
-        'timezone' => null,
+        'coerce'          => true,
+        'timezone'        => null,
+        'format'          => 'yyyy-mm-dd',
+        'datetime_format' => 'yyyy-mm-dd hh:mm:ss',
+    ],
+    'staging' => [
+        'driver'            => env('SHEET_STREAM_STAGING_DRIVER', 'database'),
+        'table'             => 'sheet_stream_staging',
+        'path'              => null,
+        'insert_batch_size' => 500,
     ],
 ];
 ```
@@ -105,3 +113,47 @@ When enabled, the engine applies sane date coercion defaults. This addresses com
 **Default:** `null`
 
 When set to a timezone string (e.g. `'America/New_York'`), date values read from spreadsheets are converted to this timezone. When `null`, no timezone conversion is applied.
+
+---
+
+## Staging pipeline options
+
+These options control the [staging pipeline](staging-pipeline.md) used when an import implements `UsesStagingTable`. All options live under the `staging` key.
+
+### `staging.driver`
+
+**Default:** `'database'`
+
+The storage backend for staged rows. Set via config or the `SHEET_STREAM_STAGING_DRIVER` environment variable.
+
+| Driver | Description | Requires |
+|---|---|---|
+| `'database'` | Rows stored in a database table with per-row audit trail | Migration published and run |
+| `'file'` | Rows stored as NDJSON files on the filesystem (faster) | Writable temp directory; shared filesystem for multi-server |
+
+### `staging.table`
+
+**Default:** `'sheet_stream_staging'`
+
+The database table name used by the `database` driver. Ignored when using the `file` driver.
+
+### `staging.path`
+
+**Default:** `null` (uses `{temp_path}/sheet_stream_staging`)
+
+Base directory for chunk files when using the `file` driver. Set this to a shared mount when running workers across multiple servers. Ignored when using the `database` driver.
+
+```php
+'staging' => [
+    'driver' => 'file',
+    'path'   => '/mnt/shared/sheet_stream_staging',
+],
+```
+
+### `staging.insert_batch_size`
+
+**Default:** `500`
+
+Number of rows per batch write in the producer job. Applies to both drivers. Larger batches mean fewer write operations but more memory per batch.
+
+**Tuning:** 500 is a good default. For the database driver, this maps to the number of rows per `INSERT` statement. For the file driver, this is the number of NDJSON lines written per `file_put_contents` call.

@@ -288,6 +288,22 @@ SheetStream::queueImport(new UsersImport, 'imports/users.xlsx', disk: 's3');
 
 When a `disk` is provided, the file is copied from the storage disk to a local temp file before processing (OpenSpout requires local file access). The temp file is cleaned up automatically.
 
+### UsesStagingTable (large file pipeline)
+
+For very large files where a single queued job risks timing out, add the `UsesStagingTable` marker interface. This activates a **two-phase producer-consumer pipeline** that splits the file across multiple parallel worker jobs:
+
+```php
+use MrDellimore\SheetStream\Concerns\ShouldQueue;
+use MrDellimore\SheetStream\Concerns\UsesStagingTable;
+
+class LargeImport implements ToModel, WithHeadingRow, ShouldQueue, UsesStagingTable
+{
+    public function model(array $row): ?Model { /* ... */ }
+}
+```
+
+The pipeline supports two staging drivers — `database` (default, with per-row audit trail) and `file` (faster, no DB overhead). See the **[Staging Pipeline](staging-pipeline.md)** documentation for the full architecture, driver comparison, and configuration guide.
+
 ### Queue configuration
 
 Control queue behavior by adding public properties to your import class:
