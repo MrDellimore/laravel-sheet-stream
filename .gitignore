@@ -11,3 +11,4 @@ phpstan.neon
 .vscode/
 .DS_Store
 _reference-laravel-excel/
+benchmarks/fixture-*.xlsx

@@ -7,7 +7,9 @@ concern API — with a streaming engine that keeps memory flat on large files.
 > **Note:** This is an independent package. It is **not** affiliated with, endorsed by, or the
 > official Laravel Excel package (by Spartner).
 
-[![Tests](https://github.com/MrDellimore/laravel-sheet-stream/actions/workflows/ci.yml/badge.svg)](https://github.com/MrDellimore/laravel-sheet-stream/actions/workflows/ci.yml)
+[![CI](https://github.com/MrDellimore/laravel-sheet-stream/actions/workflows/ci.yml/badge.svg)](https://github.com/MrDellimore/laravel-sheet-stream/actions/workflows/ci.yml)
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/mrdellimore/laravel-sheet-stream.svg)](https://packagist.org/packages/mrdellimore/laravel-sheet-stream)
+[![Total Downloads](https://img.shields.io/packagist/dt/mrdellimore/laravel-sheet-stream.svg)](https://packagist.org/packages/mrdellimore/laravel-sheet-stream)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
