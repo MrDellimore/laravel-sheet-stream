@@ -62,5 +62,8 @@ jobs:
       - name: Static analysis (PHPStan / Larastan)
         run: vendor/bin/phpstan analyse --no-progress
 
+      - name: Rector (dry-run)
+        run: vendor/bin/rector --dry-run
+
       - name: Run tests (Pest)
         run: vendor/bin/pest --no-coverage --exclude-group=benchmark

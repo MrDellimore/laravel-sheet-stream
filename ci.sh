@@ -6,7 +6,11 @@ vendor/bin/pint --test
 
 echo ""
 echo "=== Static analysis (PHPStan) ==="
-vendor/bin/phpstan analyse --no-progress
+vendor/bin/phpstan analyse --no-progress --memory-limit=256M
+
+echo ""
+echo "=== Rector (dry-run) ==="
+vendor/bin/rector --dry-run
 
 echo ""
 echo "=== Tests (Pest) ==="
