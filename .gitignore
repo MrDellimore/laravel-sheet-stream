@@ -12,5 +12,3 @@ phpstan.neon
 .DS_Store
 _reference-laravel-excel/
 benchmarks/fixture-*.xlsx
-HHC*.xlsx
-laravel-sheet-stream-PLAN.md
