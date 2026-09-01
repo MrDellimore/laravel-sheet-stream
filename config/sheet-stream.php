@@ -15,7 +15,7 @@ return [
 
     // Staging-table pattern (UsesStagingTable concern)
     'staging' => [
-        'driver' => env('SHEET_STREAM_STAGING_DRIVER', 'database'), // 'database' or 'file'
+        'driver' => env('SHEET_STREAM_STAGING_DRIVER', 'file'), // 'file' (fast, no migration) or 'database' (audit trail, retry safety)
         'table' => 'sheet_stream_staging',  // table name (database driver)
         'path' => null,                      // base path (file driver); null = temp_path/sheet_stream_staging
         'insert_batch_size' => 500,          // rows per bulk INSERT in the producer job

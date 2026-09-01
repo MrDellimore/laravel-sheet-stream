@@ -22,7 +22,7 @@ return [
         'datetime_format' => 'yyyy-mm-dd hh:mm:ss',
     ],
     'staging' => [
-        'driver'            => env('SHEET_STREAM_STAGING_DRIVER', 'database'),
+        'driver'            => env('SHEET_STREAM_STAGING_DRIVER', 'file'),
         'table'             => 'sheet_stream_staging',
         'path'              => null,
         'insert_batch_size' => 500,
@@ -122,14 +122,14 @@ These options control the [staging pipeline](staging-pipeline.md) used when an i
 
 ### `staging.driver`
 
-**Default:** `'database'`
+**Default:** `'file'`
 
 The storage backend for staged rows. Set via config or the `SHEET_STREAM_STAGING_DRIVER` environment variable.
 
 | Driver | Description | Requires |
 |---|---|---|
-| `'database'` | Rows stored in a database table with per-row audit trail | Migration published and run |
-| `'file'` | Rows stored as NDJSON files on the filesystem (faster) | Writable temp directory; shared filesystem for multi-server |
+| `'file'` | Rows stored as NDJSON files on the filesystem (fast, no migration needed) | Writable temp directory; shared filesystem for multi-server |
+| `'database'` | Rows stored in a database table with per-row audit trail and retry safety | Migration published and run |
 
 ### `staging.table`
 

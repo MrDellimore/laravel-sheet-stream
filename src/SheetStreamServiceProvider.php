@@ -15,7 +15,7 @@ class SheetStreamServiceProvider extends ServiceProvider
         $this->app->singleton('sheet-stream', fn ($app) => new SheetStreamManager($app));
 
         $this->app->singleton(StagingStore::class, function ($app) {
-            $driver = $app['config']['sheet-stream.staging.driver'] ?? 'database';
+            $driver = $app['config']['sheet-stream.staging.driver'] ?? 'file';
 
             return match ($driver) {
                 'file' => new FileStagingStore(

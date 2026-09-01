@@ -302,7 +302,7 @@ class LargeImport implements ToModel, WithHeadingRow, ShouldQueue, UsesStagingTa
 }
 ```
 
-The pipeline supports two staging drivers — `database` (default, with per-row audit trail) and `file` (faster, no DB overhead). See the **[Staging Pipeline](staging-pipeline.md)** documentation for the full architecture, driver comparison, and configuration guide.
+The pipeline supports two staging drivers — `file` (default, fast, no migration needed) and `database` (per-row audit trail, retry safety). See the **[Staging Pipeline](staging-pipeline.md)** documentation for the full architecture, driver comparison, and configuration guide.
 
 ### Queue configuration
 

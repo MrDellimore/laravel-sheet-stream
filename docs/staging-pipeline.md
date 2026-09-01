@@ -123,7 +123,47 @@ Formula: `chunk_number = floor((row_number - 1) / chunk_size)`
 
 The staging pipeline supports two storage drivers for the intermediate row data. The driver is selected via the `staging.driver` config option.
 
-### Database driver (default)
+### File driver (default)
+
+```php
+// config/sheet-stream.php
+'staging' => [
+    'driver' => 'file',
+    'path'   => null,   // null = temp_path/sheet_stream_staging
+    'insert_batch_size' => 500,
+],
+```
+
+Rows are written as NDJSON files (one file per chunk). The consumer reads the file and deletes it after processing. No migration or database table required.
+
+**File layout:**
+
+```
+{staging_path}/{import_id}/
+    s0_c0.ndjson    ← sheet 0, chunk 0
+    s0_c1.ndjson    ← sheet 0, chunk 1
+    s0_c2.ndjson    ← sheet 0, chunk 2
+    s1_c0.ndjson    ← sheet 1, chunk 0
+```
+
+Each line in the NDJSON file is:
+
+```json
+{"row_number":1,"row_data":{"name":"Alice","email":"alice@example.com"}}
+```
+
+**Pros:**
+- No database table or migration required
+- No per-row `UPDATE` queries (the biggest speed gain)
+- File I/O is local with no SQL parsing or network roundtrips
+- Chunk files are automatically cleaned up after processing
+
+**Cons:**
+- No per-row audit trail (no `processed_at` / `failed_at` tracking)
+- If a consumer job fails mid-chunk, the entire chunk is reprocessed on retry
+- Requires a shared filesystem if running workers on multiple servers (NFS, EFS, etc.)
+
+### Database driver
 
 ```php
 // config/sheet-stream.php
@@ -132,6 +172,12 @@ The staging pipeline supports two storage drivers for the intermediate row data.
     'table'  => 'sheet_stream_staging',
     'insert_batch_size' => 500,
 ],
+```
+
+Or via environment variable:
+
+```env
+SHEET_STREAM_STAGING_DRIVER=database
 ```
 
 Rows are bulk-inserted into a database table. The consumer reads them via a query and marks each row as processed or failed with a timestamp.
@@ -170,52 +216,6 @@ php artisan migrate
 - Requires a migration and database table
 - Per-row `UPDATE` queries in the consumer (1 per row) add overhead
 
-### File driver
-
-```php
-// config/sheet-stream.php
-'staging' => [
-    'driver' => 'file',
-    'path'   => null,   // null = temp_path/sheet_stream_staging
-    'insert_batch_size' => 500,
-],
-```
-
-Or via environment variable:
-
-```env
-SHEET_STREAM_STAGING_DRIVER=file
-```
-
-Rows are written as NDJSON files (one file per chunk). The consumer reads the file and deletes it after processing.
-
-**File layout:**
-
-```
-{staging_path}/{import_id}/
-    s0_c0.ndjson    ← sheet 0, chunk 0
-    s0_c1.ndjson    ← sheet 0, chunk 1
-    s0_c2.ndjson    ← sheet 0, chunk 2
-    s1_c0.ndjson    ← sheet 1, chunk 0
-```
-
-Each line in the NDJSON file is:
-
-```json
-{"row_number":1,"row_data":{"name":"Alice","email":"alice@example.com"}}
-```
-
-**Pros:**
-- No database table or migration required
-- No per-row `UPDATE` queries (the biggest speed gain)
-- File I/O is local with no SQL parsing or network roundtrips
-- Chunk files are automatically cleaned up after processing
-
-**Cons:**
-- No per-row audit trail (no `processed_at` / `failed_at` tracking)
-- If a consumer job fails mid-chunk, the entire chunk is reprocessed on retry
-- Requires a shared filesystem if running workers on multiple servers (NFS, EFS, etc.)
-
 ### Performance comparison
 
 For a 100,000-row file with `chunk_size=1000` (100 chunks):
@@ -248,7 +248,7 @@ All staging options live under the `staging` key in `config/sheet-stream.php`:
 
 ```php
 'staging' => [
-    'driver'            => env('SHEET_STREAM_STAGING_DRIVER', 'database'),
+    'driver'            => env('SHEET_STREAM_STAGING_DRIVER', 'file'),
     'table'             => 'sheet_stream_staging',
     'path'              => null,
     'insert_batch_size' => 500,
@@ -257,7 +257,7 @@ All staging options live under the `staging` key in `config/sheet-stream.php`:
 
 | Option | Default | Description |
 |---|---|---|
-| `driver` | `'database'` | `'database'` or `'file'` |
+| `driver` | `'file'` | `'file'` or `'database'` |
 | `table` | `'sheet_stream_staging'` | Table name (database driver only) |
 | `path` | `null` | Base directory for chunk files (file driver only). `null` defaults to `{temp_path}/sheet_stream_staging` |
 | `insert_batch_size` | `500` | Rows per batch write in the producer. Applies to both drivers. |
@@ -432,9 +432,9 @@ The benchmark measures:
 To compare drivers, run the benchmark twice — once with each driver configured:
 
 ```bash
-# Database driver (default)
+# File driver (default)
 BENCH_FILE="file.xlsx" ./vendor/bin/pest --group=benchmark
 
-# File driver
-SHEET_STREAM_STAGING_DRIVER=file BENCH_FILE="file.xlsx" ./vendor/bin/pest --group=benchmark
+# Database driver
+SHEET_STREAM_STAGING_DRIVER=database BENCH_FILE="file.xlsx" ./vendor/bin/pest --group=benchmark
 ```
