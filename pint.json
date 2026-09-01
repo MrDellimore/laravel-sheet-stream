@@ -1,0 +1,7 @@
+{
+    "preset": "laravel",
+    "exclude": [
+        "_reference-laravel-excel",
+        "benchmarks"
+    ]
+}
