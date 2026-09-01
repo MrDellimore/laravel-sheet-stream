@@ -149,13 +149,15 @@ class StagingProducerJob implements ShouldQueue
             ];
 
             if (count($batch) >= $this->insertBatchSize) {
-                DB::table($stagingTable)->insert($batch);
+                // Wrap each write in a transaction so databases that auto-commit
+                // per statement (e.g. SQLite) don't pay a sync penalty per row.
+                DB::transaction(fn () => DB::table($stagingTable)->insert($batch));
                 $batch = [];
             }
         }
 
         if ($batch !== []) {
-            DB::table($stagingTable)->insert($batch);
+            DB::transaction(fn () => DB::table($stagingTable)->insert($batch));
         }
 
         return $maxChunk + 1; // total chunk count (0 if no rows)

@@ -9,6 +9,8 @@ return [
     'dates' => [
         'coerce' => true,              // sane date coercion by default
         'timezone' => null,
+        'format' => 'yyyy-mm-dd',              // Excel number format for date-only exports
+        'datetime_format' => 'yyyy-mm-dd hh:mm:ss', // Excel number format for date+time exports
     ],
 
     // Staging-table pattern (UsesStagingTable concern)

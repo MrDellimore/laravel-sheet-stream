@@ -59,6 +59,10 @@ class SheetStreamManager
             try {
                 $handle = fopen($tmp, 'rb');
 
+                if ($handle === false) {
+                    return;
+                }
+
                 while (! feof($handle)) {
                     echo fread($handle, 65536);
                     flush();
@@ -71,7 +75,7 @@ class SheetStreamManager
         }, 200, [
             'Content-Type' => $this->mimeType($extension),
             'Content-Disposition' => 'attachment; filename="'.$filename.'"',
-            'Content-Length' => (string) filesize($tmp),
+            'Content-Length' => (string) (filesize($tmp) ?: 0),
         ]);
     }
 
@@ -89,6 +93,10 @@ class SheetStreamManager
         try {
             $disk ??= (string) ($this->app['config']['filesystems.default'] ?? 'local');
             $handle = fopen($tmp, 'rb');
+
+            if ($handle === false) {
+                throw new \RuntimeException("Failed to open temp export file for reading: {$tmp}");
+            }
 
             try {
                 $result = Storage::disk($disk)->writeStream($path, $handle);
@@ -149,7 +157,7 @@ class SheetStreamManager
     {
         $driver = (string) ($this->app['config']['sheet-stream.default_writer'] ?? 'openspout');
         $nativeOptions = $export instanceof WithWriterOptions ? $export->writerOptions() : null;
-        $writer = EngineFactory::writer($driver, $extension, $nativeOptions);
+        $writer = EngineFactory::writer($driver, $extension, $nativeOptions, $this->writerOptions());
         $tmp = tempnam($this->tempPath(), 'sheet_stream_');
         $writer->openToFile($tmp);
 
@@ -173,6 +181,16 @@ class SheetStreamManager
             'dates' => [
                 'coerce' => (bool) ($this->app['config']['sheet-stream.dates.coerce'] ?? true),
                 'timezone' => $this->app['config']['sheet-stream.dates.timezone'] ?? null,
+            ],
+        ];
+    }
+
+    private function writerOptions(): array
+    {
+        return [
+            'dates' => [
+                'format' => (string) ($this->app['config']['sheet-stream.dates.format'] ?? 'yyyy-mm-dd'),
+                'datetime_format' => (string) ($this->app['config']['sheet-stream.dates.datetime_format'] ?? 'yyyy-mm-dd hh:mm:ss'),
             ],
         ];
     }

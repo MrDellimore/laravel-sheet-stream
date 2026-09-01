@@ -24,10 +24,15 @@ final class EngineFactory
         };
     }
 
-    public static function writer(string $driver, string $extension, ?object $nativeOptions = null): Writer
+    public static function writer(string $driver, string $extension, ?object $nativeOptions = null, array $options = []): Writer
     {
         return match ($driver) {
-            'openspout' => new OpenSpoutWriter($extension, $nativeOptions),
+            'openspout' => new OpenSpoutWriter(
+                $extension,
+                $nativeOptions,
+                dateFormat: $options['dates']['format'] ?? 'yyyy-mm-dd',
+                dateTimeFormat: $options['dates']['datetime_format'] ?? 'yyyy-mm-dd hh:mm:ss',
+            ),
             'phpspreadsheet' => self::requirePhpSpreadsheet($driver, fn () => new PhpSpreadsheetWriter($extension)),
             default => throw new InvalidArgumentException(
                 "Unsupported writer driver: {$driver}. Supported drivers: openspout, phpspreadsheet."

@@ -45,11 +45,8 @@ final class OpenSpoutSheetReader implements SheetReader
                 $row = $iterator->current();
                 $cells = $this->safeToArray($row);
             } catch (\Throwable) {
-                // Row could not be read (e.g. out-of-range date serial in a cell).
-                // Skip the row and advance the iterator.
-                try {
-                    $iterator->next();
-                } catch (\Throwable) {
+                // current() failed — skip this row entirely.
+                if (! $this->advancePastBadRow($iterator)) {
                     break;
                 }
 
@@ -65,11 +62,67 @@ final class OpenSpoutSheetReader implements SheetReader
             try {
                 $iterator->next();
             } catch (\Throwable) {
-                // next() can throw if the following row has a corrupt cell.
-                // The current row was already yielded, so just stop.
-                break;
+                // next() failed while reading the row that follows the one we just yielded.
+                // The XML reader is now positioned after the bad cell, still inside that row.
+                // We need to:
+                //   1. Consume the remainder of the bad row (call next() to get a partial row).
+                //   2. Discard that partial row by calling next() once more to get the
+                //      clean row that follows.
+                // If either recovery call fails we stop — but in practice each successive
+                // bad row triggers its own recovery round on a future loop iteration.
+                if (! $this->advancePastBadRow($iterator)) {
+                    break;
+                }
             }
         }
+    }
+
+    /**
+     * Advance the iterator past a row whose cells could not be read.
+     *
+     * When next() throws, the XML reader is partway through the bad row (positioned
+     * after the offending cell, because XMLReader::expand() advances past that element).
+     * Calling next() again reads from there to the row's closing tag, producing a
+     * garbage partial row in the iterator buffer. A second next() then advances to the
+     * first clean row after the bad one.
+     *
+     * Both calls may throw independently (e.g. a row with multiple bad cells, or two
+     * consecutive bad rows). We retry each step up to 5 times before giving up.
+     *
+     * Returns true when the iterator is positioned on a clean row and the caller
+     * should continue; false when iteration must stop.
+     */
+    private function advancePastBadRow(\Iterator $iterator): bool
+    {
+        // Step 1: consume the remainder of the bad row. One call is normally enough;
+        // retry up to 5 times in case the row contains more than one bad cell.
+        $consumed = false;
+
+        for ($i = 0; $i < 5; $i++) {
+            try {
+                $iterator->next();
+                $consumed = true;
+                break;
+            } catch (\Throwable) {
+                // Another bad cell within the same row — keep consuming.
+            }
+        }
+
+        if (! $consumed) {
+            return false;
+        }
+
+        // Step 2: the iterator buffer now holds a partial/garbage row. Call next()
+        // to advance to the real row that follows. If that row also has bad cells,
+        // this call throws — the outer loop will catch it on the next iteration and
+        // call advancePastBadRow() again, so we handle cascading bad rows naturally.
+        try {
+            $iterator->next();
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
