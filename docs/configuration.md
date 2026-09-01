@@ -14,6 +14,7 @@ return [
     'default_writer' => 'openspout',
     'batch_size'     => 1000,
     'chunk_size'     => 1000,
+    'temp_path'      => null,
     'dates' => [
         'coerce'   => true,
         'timezone' => null,
@@ -27,13 +28,33 @@ return [
 
 **Default:** `'openspout'`
 
-The engine driver used for reading spreadsheets. Currently only `'openspout'` is supported. A PhpSpreadsheet fallback driver is planned for a future release (to support `.xls`, formulas, and charts).
+The engine driver used for reading spreadsheets.
+
+| Driver | Install | Streaming | `.xls` | Formulas | Memory |
+|---|---|---|---|---|---|
+| `'openspout'` | Included | Yes | No | Cached values only | Flat |
+| `'phpspreadsheet'` | `composer require phpoffice/phpspreadsheet` | No | Yes | Yes | Grows with file size |
+
+**Use `'openspout'`** (default) for most imports — it streams rows one at a time with flat memory.
+
+**Use `'phpspreadsheet'`** when you need to read `.xls` (legacy binary) files or require formula evaluation. Note: PhpSpreadsheet loads the entire workbook into memory.
+
+You can mix drivers — use `phpspreadsheet` for reading and `openspout` for writing:
+
+```php
+'default_reader' => 'phpspreadsheet',  // supports .xls
+'default_writer' => 'openspout',       // streams exports
+```
 
 ### `default_writer`
 
 **Default:** `'openspout'`
 
-The engine driver used for writing spreadsheets. Currently only `'openspout'` is supported.
+The engine driver used for writing spreadsheets. The same two drivers are available.
+
+**Use `'openspout'`** (default) for most exports — it streams rows directly to disk.
+
+**Use `'phpspreadsheet'`** when you need to write `.xls` format or need PhpSpreadsheet-specific features (cell-level styling, formula writing, etc.).
 
 ### `batch_size`
 
@@ -62,6 +83,16 @@ class MyImport implements ToModel, WithBatchInserts
 The number of rows per chunk when using `FromQuery` exports. The query is executed via Eloquent's `lazy()` method with this chunk size, keeping memory flat for large result sets.
 
 **Tuning:** Larger chunks reduce the number of database queries but use more memory per chunk. The default of 1000 works well for most cases.
+
+### `temp_path`
+
+**Default:** `null` (uses `sys_get_temp_dir()`)
+
+Directory for temporary files created during exports. Set this when the default system temp directory is unsuitable (e.g., serverless environments with read-only filesystem where only a specific path is writable).
+
+```php
+'temp_path' => storage_path('app/temp'),
+```
 
 ### `dates.coerce`
 

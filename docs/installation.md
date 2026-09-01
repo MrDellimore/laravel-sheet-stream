@@ -37,6 +37,31 @@ use MrDellimore\SheetStream\Facades\SheetStream;
 app('sheet-stream'); // Returns SheetStreamManager instance
 ```
 
+## Optional: PhpSpreadsheet driver
+
+If you need `.xls` (legacy binary) support, formula evaluation, or other features not available in the OpenSpout engine, install PhpSpreadsheet:
+
+```bash
+composer require phpoffice/phpspreadsheet
+```
+
+Then set the driver in your config:
+
+```php
+// config/sheet-stream.php
+'default_reader' => 'phpspreadsheet',
+'default_writer' => 'phpspreadsheet',
+```
+
+You can also mix drivers — for example, use `phpspreadsheet` only for reading (to support `.xls` imports) while keeping `openspout` for writing (better memory on large exports):
+
+```php
+'default_reader' => 'phpspreadsheet',
+'default_writer' => 'openspout',
+```
+
+See [Configuration](configuration.md) for details on when to use each driver.
+
 ## Using without auto-discovery
 
 If you have disabled auto-discovery, add the provider and alias manually in your `bootstrap/providers.php` or `config/app.php`:

@@ -7,10 +7,14 @@ An import class is a plain PHP class that implements one or more concern interfa
 ```php
 use MrDellimore\SheetStream\Facades\SheetStream;
 
+// Synchronous import from a local file path
 SheetStream::import(new YourImport, $filePath);
+
+// Queue an import (if ShouldQueue is implemented, import() auto-queues)
+SheetStream::queueImport(new YourImport, 'imports/file.xlsx', disk: 's3');
 ```
 
-The `$filePath` should be an absolute path to an `.xlsx`, `.csv`, `.tsv`, or `.ods` file.
+For synchronous imports, `$filePath` should be an absolute path to an `.xlsx`, `.csv`, `.tsv`, or `.ods` file. For queued imports with a `disk` parameter, the path is relative to the storage disk.
 
 ---
 
@@ -168,13 +172,13 @@ The rule keys match the row keys — when using `WithHeadingRow`, these are the 
 
 ### SkipsOnFailure
 
-Instead of throwing on the first invalid row, continue processing and collect **all** validation failures. After the sheet is fully processed, the `onFailure()` method is called once with a collection of every `ValidationException`.
+Instead of throwing on the first invalid row, continue processing and collect **all** validation failures. After the sheet is fully processed, the `onFailure()` method is called once with a collection of `Failure` objects — each carrying the **row number**, **errors**, and **original values**.
 
 ```php
 use Illuminate\Support\Collection;
-use Illuminate\Validation\ValidationException;
 use MrDellimore\SheetStream\Concerns\SkipsOnFailure;
 use MrDellimore\SheetStream\Concerns\WithValidation;
+use MrDellimore\SheetStream\Imports\Failure;
 
 class ClaimantsImport implements ToModel, WithHeadingRow, WithValidation, SkipsOnFailure
 {
@@ -188,20 +192,117 @@ class ClaimantsImport implements ToModel, WithHeadingRow, WithValidation, SkipsO
         ];
     }
 
-    /** @param Collection<int, ValidationException> $failures */
+    /** @param Collection<int, Failure> $failures */
     public function onFailure(Collection $failures): void
     {
-        // Log all failures, notify the user, etc.
         foreach ($failures as $failure) {
             logger()->warning('Import row failed', [
-                'errors' => $failure->errors(),
+                'row'    => $failure->row(),     // 1-based spreadsheet row number
+                'errors' => $failure->errors(),  // ['email' => ['The email field is required.']]
+                'values' => $failure->values(),  // ['name' => 'Bob', 'email' => 'not-valid']
             ]);
         }
     }
 }
 ```
 
-> **This is an improvement over Laravel Excel**, which only returns the first validation failure. Sheet Stream collects them all.
+#### The `Failure` object
+
+| Method | Returns | Description |
+|---|---|---|
+| `row()` | `int` | 1-based row number in the spreadsheet (includes the heading row, so data starts at row 2) |
+| `errors()` | `array<string, list<string>>` | Validation errors keyed by attribute name |
+| `values()` | `array<string, mixed>` | The original row data that failed validation |
+
+> **This is an improvement over Laravel Excel**, which only returns the first validation failure. Sheet Stream collects them all, with row numbers so you can tell the user exactly where to look.
+
+---
+
+## Reader options
+
+### WithReaderOptions
+
+Pass native OpenSpout reader options to customize format-specific behavior like CSV delimiters, encoding, or XLSX date formatting.
+
+```php
+use MrDellimore\SheetStream\Concerns\ToArray;
+use MrDellimore\SheetStream\Concerns\WithHeadingRow;
+use MrDellimore\SheetStream\Concerns\WithReaderOptions;
+use OpenSpout\Reader\CSV\Options;
+
+class SemicolonImport implements ToArray, WithHeadingRow, WithReaderOptions
+{
+    public function array(array $rows): void { /* ... */ }
+
+    public function readerOptions(): object
+    {
+        $options = new Options;
+        $options->FIELD_DELIMITER = ';';
+        $options->ENCODING = 'UTF-8';
+
+        return $options;
+    }
+}
+```
+
+Available option classes by format:
+
+| Format | Options class | Key properties |
+|---|---|---|
+| CSV | `OpenSpout\Reader\CSV\Options` | `FIELD_DELIMITER`, `FIELD_ENCLOSURE`, `ENCODING`, `SHOULD_PRESERVE_EMPTY_ROWS` |
+| XLSX | `OpenSpout\Reader\XLSX\Options` | `SHOULD_FORMAT_DATES`, `SHOULD_PRESERVE_EMPTY_ROWS`, `SHOULD_USE_1904_DATES`, `SHOULD_LOAD_MERGE_CELLS`, temp folder |
+| ODS | `OpenSpout\Reader\ODS\Options` | `SHOULD_FORMAT_DATES`, `SHOULD_PRESERVE_EMPTY_ROWS` |
+
+---
+
+## Queued imports
+
+### ShouldQueue
+
+Dispatch an import to run in a queue worker instead of synchronously. Add the `ShouldQueue` marker interface to your import class:
+
+```php
+use MrDellimore\SheetStream\Concerns\ShouldQueue;
+use MrDellimore\SheetStream\Concerns\ToModel;
+use MrDellimore\SheetStream\Concerns\WithHeadingRow;
+
+class UsersImport implements ToModel, WithHeadingRow, ShouldQueue
+{
+    public function model(array $row): ?Model { /* ... */ }
+}
+```
+
+When `ShouldQueue` is implemented, `import()` automatically dispatches to the queue:
+
+```php
+// Dispatches a QueuedImportJob — returns PendingDispatch
+SheetStream::import(new UsersImport, storage_path('imports/users.xlsx'));
+```
+
+You can also call `queueImport()` explicitly, optionally specifying a storage disk:
+
+```php
+// Import a file stored on S3
+SheetStream::queueImport(new UsersImport, 'imports/users.xlsx', disk: 's3');
+```
+
+When a `disk` is provided, the file is copied from the storage disk to a local temp file before processing (OpenSpout requires local file access). The temp file is cleaned up automatically.
+
+### Queue configuration
+
+Control queue behavior by adding public properties to your import class:
+
+```php
+class UsersImport implements ToModel, WithHeadingRow, ShouldQueue
+{
+    public ?string $queue = 'imports';
+    public ?string $connection = 'redis';
+    public ?int $tries = 3;
+    public ?int $timeout = 600;
+
+    public function model(array $row): ?Model { /* ... */ }
+}
+```
 
 ---
 

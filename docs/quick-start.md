@@ -96,19 +96,43 @@ SheetStream::store(new UsersExport, 'exports/users.xlsx', disk: 's3');
 
 ## Supported file formats
 
-| Format | Extension | Import | Export |
+| Format | Extension | OpenSpout driver | PhpSpreadsheet driver |
 |---|---|---|---|
 | Excel (Open XML) | `.xlsx` | Yes | Yes |
 | CSV | `.csv` | Yes | Yes |
 | TSV | `.tsv` | Yes | Yes |
 | OpenDocument | `.ods` | Yes | Yes |
-| Legacy Excel | `.xls` | No | No |
+| Legacy Excel | `.xls` | No | Yes |
 
-Attempting to use `.xls` files throws an `UnsupportedByEngine` exception with a clear message.
+The default `openspout` driver does not support `.xls`. To read or write `.xls` files, install `phpoffice/phpspreadsheet` and set the driver to `'phpspreadsheet'` in your config. See [Configuration](configuration.md) for details.
+
+## Queue an import or export
+
+Add `ShouldQueue` to run in the background:
+
+```php
+use MrDellimore\SheetStream\Concerns\ShouldQueue;
+
+class UsersImport implements ToModel, WithHeadingRow, ShouldQueue
+{
+    public ?string $queue = 'imports';
+    public ?int $timeout = 600;
+
+    public function model(array $row): ?Model { /* ... */ }
+}
+```
+
+```php
+// Auto-detects ShouldQueue and dispatches to the queue:
+SheetStream::import(new UsersImport, storage_path('imports/users.xlsx'));
+
+// Or import from a storage disk:
+SheetStream::queueImport(new UsersImport, 'imports/users.xlsx', disk: 's3');
+```
 
 ## Next steps
 
-- [Imports](imports.md) — all import concerns in detail
-- [Exports](exports.md) — all export concerns in detail
-- [Configuration](configuration.md) — tune batch sizes, date handling, etc.
+- [Imports](imports.md) — all import concerns in detail (validation, reader options, queued imports)
+- [Exports](exports.md) — all export concerns in detail (styling, writer options, queued exports)
+- [Configuration](configuration.md) — tune batch sizes, temp paths, date handling, etc.
 - [Migration Guide](migration-guide.md) — coming from Laravel Excel?

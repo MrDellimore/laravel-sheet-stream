@@ -69,6 +69,21 @@ return SheetStream::download(new ClaimantsExport, 'claimants.xlsx');
 SheetStream::store(new ClaimantsExport, 'exports/claimants.xlsx', disk: 's3');
 ```
 
+### Queued import/export
+
+```php
+use MrDellimore\SheetStream\Concerns\ShouldQueue;
+
+class ClaimantsImport implements ToModel, WithHeadingRow, ShouldQueue { /* ... */ }
+
+// Auto-detects ShouldQueue and dispatches to your queue:
+SheetStream::import(new ClaimantsImport, 'imports/claimants.xlsx');
+
+// Or call explicitly:
+SheetStream::queueImport(new ClaimantsImport, 'imports/claimants.xlsx', disk: 's3');
+SheetStream::queueExport(new ClaimantsExport, 'exports/claimants.xlsx', disk: 's3');
+```
+
 ---
 
 ## Writing an import class
@@ -100,6 +115,7 @@ class ClaimantsImport implements ToModel, WithHeadingRow, WithBatchInserts
 ```php
 use MrDellimore\SheetStream\Concerns\WithValidation;
 use MrDellimore\SheetStream\Concerns\SkipsOnFailure;
+use MrDellimore\SheetStream\Imports\Failure;
 use Illuminate\Support\Collection;
 
 class ClaimantsImport implements ToModel, WithHeadingRow, WithValidation, SkipsOnFailure
@@ -114,10 +130,14 @@ class ClaimantsImport implements ToModel, WithHeadingRow, WithValidation, SkipsO
         ];
     }
 
-    // Called once with ALL failures after all rows are processed.
+    // Called once with ALL failures (with row numbers) after all rows are processed.
     public function onFailure(Collection $failures): void
     {
-        // log, notify, etc.
+        foreach ($failures as $failure) {
+            // $failure->row()    — 1-based spreadsheet row number
+            // $failure->errors() — ['attr' => ['messages...']]
+            // $failure->values() — original row data
+        }
     }
 }
 ```
@@ -169,9 +189,11 @@ class ClaimantsExport implements FromQuery, WithHeadings, WithMapping
 | `WithHeadingRow` | Use the first row as associative keys (lowercased) |
 | `WithBatchInserts` | Control the flush buffer size for `ToModel` |
 | `WithValidation` | Validate each row with Laravel validation rules |
-| `SkipsOnFailure` | Skip invalid rows; receive **all** failures at once after processing |
+| `SkipsOnFailure` | Skip invalid rows; receive **all** failures (with row numbers) at once after processing |
 | `SkipsEmptyRows` | Skip rows where every cell is null or empty string |
 | `WithMultipleSheets` | Route each sheet to a different import object |
+| `WithReaderOptions` | Pass native OpenSpout reader options (CSV delimiter, encoding, etc.) |
+| `ShouldQueue` | Dispatch the import to a queue worker |
 
 ### Export concerns
 
@@ -184,20 +206,30 @@ class ClaimantsExport implements FromQuery, WithHeadings, WithMapping
 | `WithMapping` | Transform each row/model before writing cells |
 | `WithTitle` | Set the sheet name |
 | `WithMultipleSheets` | Write multiple sheets in a single file |
+| `WithHeadingStyle` | Apply a style to the heading row (bold, font size, etc.) |
+| `WithDefaultRowStyle` | Apply a default style to every data row |
+| `WithColumnStyles` | Apply per-column styles (number formats, colors, etc.) |
+| `WithWriterOptions` | Pass native OpenSpout writer options (CSV delimiter, BOM, etc.) |
+| `ShouldQueue` | Dispatch the export to a queue worker |
 
 ---
 
 ## How this differs from Laravel Excel
 
-| Capability | This package (OpenSpout) | Laravel Excel (PhpSpreadsheet) |
-|---|---|---|
-| Memory on large files | Flat (streaming) | Grows with file size |
-| Legacy `.xls` (binary) | Not supported | Supported |
-| Formula recalculation | Cached values only | Supported |
-| Charts / drawings / images | Not supported | Supported |
-| `FromView` (Blade → xlsx) | Not supported | Supported |
-| Streaming exports | Supported | Limited |
-| Collect **all** validation failures | Supported | First failure only |
+| Capability | OpenSpout driver (default) | PhpSpreadsheet driver | Laravel Excel |
+|---|---|---|---|
+| Memory on large files | Flat (streaming) | Grows with file size | Grows with file size |
+| Legacy `.xls` (binary) | Not supported | Supported | Supported |
+| Formula recalculation | Cached values only | Supported | Supported |
+| Charts / drawings / images | Not supported | Via PhpSpreadsheet | Supported |
+| `FromView` (Blade → xlsx) | Not supported | Not supported | Supported |
+| Streaming exports | Supported | No | Limited |
+| Collect **all** validation failures | Yes (with row numbers) | Yes (with row numbers) | First failure only |
+| Queued imports/exports | Yes (`ShouldQueue`) | Yes (`ShouldQueue`) | Yes |
+| Row/column styling | Yes (XLSX/ODS) | No | Yes |
+| CSV delimiter/encoding options | Yes (`WithReaderOptions` / `WithWriterOptions`) | No | Yes |
+
+> **Two engines, one API.** Switch between `openspout` (streaming) and `phpspreadsheet` (full-featured) via config — your import/export classes stay the same. Install the PhpSpreadsheet driver with: `composer require phpoffice/phpspreadsheet`
 
 ---
 
@@ -210,6 +242,7 @@ return [
     'default_writer' => 'openspout',
     'batch_size'     => 1000,   // rows per DB insert buffer (ToModel)
     'chunk_size'     => 1000,   // rows per lazy-load chunk (FromQuery)
+    'temp_path'      => null,   // null = sys_get_temp_dir()
     'dates' => [
         'coerce'   => true,
         'timezone' => null,

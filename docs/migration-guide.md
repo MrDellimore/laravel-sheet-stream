@@ -27,6 +27,8 @@ Sheet Stream uses the **same concern names** as Laravel Excel. Migrating an impo
 | `Maatwebsite\Excel\Concerns\SkipsOnFailure` | `MrDellimore\SheetStream\Concerns\SkipsOnFailure` | Signature differs (see below) |
 | `Maatwebsite\Excel\Concerns\WithMultipleSheets` | `MrDellimore\SheetStream\Concerns\WithMultipleSheets` | Namespace only |
 | `Maatwebsite\Excel\Concerns\WithChunkReading` | *(not needed)* | Remove — streaming is built-in |
+| `Maatwebsite\Excel\Concerns\WithCustomCsvSettings` | `MrDellimore\SheetStream\Concerns\WithReaderOptions` | Different API (see below) |
+| `Illuminate\Contracts\Queue\ShouldQueue` | `MrDellimore\SheetStream\Concerns\ShouldQueue` | Namespace only |
 
 ### Export concerns
 
@@ -39,30 +41,49 @@ Sheet Stream uses the **same concern names** as Laravel Excel. Migrating an impo
 | `Maatwebsite\Excel\Concerns\WithMapping` | `MrDellimore\SheetStream\Concerns\WithMapping` | Namespace only |
 | `Maatwebsite\Excel\Concerns\WithTitle` | `MrDellimore\SheetStream\Concerns\WithTitle` | Namespace only |
 | `Maatwebsite\Excel\Concerns\WithMultipleSheets` | `MrDellimore\SheetStream\Concerns\WithMultipleSheets` | Namespace only |
+| `Maatwebsite\Excel\Concerns\WithStyles` | `WithHeadingStyle` / `WithDefaultRowStyle` / `WithColumnStyles` | Different API (see below) |
+| `Maatwebsite\Excel\Concerns\WithCustomCsvSettings` | `MrDellimore\SheetStream\Concerns\WithWriterOptions` | Different API (see below) |
+| `Illuminate\Contracts\Queue\ShouldQueue` | `MrDellimore\SheetStream\Concerns\ShouldQueue` | Namespace only |
 
 ## What changes beyond the namespace
 
 ### SkipsOnFailure signature
 
-**Laravel Excel** calls `onFailure()` with an array of `Maatwebsite\Excel\Validators\Failure` objects.
+**Laravel Excel** calls `onFailure()` with a variadic array of `Maatwebsite\Excel\Validators\Failure` objects.
 
-**Sheet Stream** calls `onFailure()` once after all rows are processed, with a `Collection<int, ValidationException>`:
+**Sheet Stream** calls `onFailure()` once after all rows are processed, with a `Collection<int, Failure>` where each `Failure` carries the row number, errors, and original values:
 
 ```php
 // Laravel Excel
-public function onFailure(Failure ...$failures): void { }
+use Maatwebsite\Excel\Validators\Failure;
+
+public function onFailure(Failure ...$failures): void
+{
+    foreach ($failures as $failure) {
+        $failure->row();       // row number
+        $failure->attribute(); // single attribute name
+        $failure->errors();    // error messages for that attribute
+    }
+}
 
 // Sheet Stream
+use MrDellimore\SheetStream\Imports\Failure;
+use Illuminate\Support\Collection;
+
 public function onFailure(Collection $failures): void
 {
-    // Each item is an Illuminate\Validation\ValidationException
     foreach ($failures as $failure) {
-        $failure->errors(); // ['email' => ['The email field is required.']]
+        $failure->row();    // 1-based spreadsheet row number
+        $failure->errors(); // ['attr' => ['msg', ...]] — all errors for the row
+        $failure->values(); // the original row data
     }
 }
 ```
 
-Key difference: Sheet Stream collects **all** failures and delivers them in one call. Laravel Excel delivers them incrementally with a variadic signature.
+Key differences:
+- Sheet Stream collects **all** failures and delivers them in one call (not incrementally).
+- Each `Failure` contains **all** validation errors for the row (not one attribute at a time).
+- `values()` gives you the full row data that failed, making it easy to report back to the user.
 
 ### WithChunkReading — just remove it
 
@@ -85,6 +106,105 @@ Sheet Stream streams every import by default. There is no `WithChunkReading` con
   }
 ```
 
+### WithStyles → WithHeadingStyle / WithDefaultRowStyle / WithColumnStyles
+
+**Laravel Excel** lets you imperatively style arbitrary cell ranges via a `WithStyles` interface that receives a `Worksheet` object. This requires the entire spreadsheet to be in memory.
+
+**Sheet Stream** uses declarative, row-oriented styling that works with streaming. Instead of one `WithStyles`, there are three focused concerns:
+
+```php
+// Laravel Excel
+use Maatwebsite\Excel\Concerns\WithStyles;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+
+class UsersExport implements WithStyles
+{
+    public function styles(Worksheet $sheet): array
+    {
+        return [
+            1 => ['font' => ['bold' => true]],       // Heading row
+            'B' => ['numberFormat' => ['formatCode' => '#,##0.00']],
+        ];
+    }
+}
+
+// Sheet Stream
+use MrDellimore\SheetStream\Concerns\WithHeadingStyle;
+use MrDellimore\SheetStream\Concerns\WithColumnStyles;
+use OpenSpout\Common\Entity\Style\Style;
+
+class UsersExport implements WithHeadingStyle, WithColumnStyles
+{
+    public function headingStyle(): Style
+    {
+        $style = new Style;
+        $style->setFontBold();
+        return $style;
+    }
+
+    public function columnStyles(): array
+    {
+        $amountStyle = new Style;
+        $amountStyle->setFormat('#,##0.00');
+        return [1 => $amountStyle]; // Column B (0-indexed)
+    }
+}
+```
+
+### WithCustomCsvSettings → WithReaderOptions / WithWriterOptions
+
+**Laravel Excel** uses `WithCustomCsvSettings` to configure CSV delimiters and enclosure.
+
+**Sheet Stream** passes native OpenSpout Options objects via `WithReaderOptions` (for imports) and `WithWriterOptions` (for exports):
+
+```php
+// Laravel Excel
+use Maatwebsite\Excel\Concerns\WithCustomCsvSettings;
+
+class CsvImport implements WithCustomCsvSettings
+{
+    public function getCsvSettings(): array
+    {
+        return ['delimiter' => ';', 'enclosure' => "'"];
+    }
+}
+
+// Sheet Stream
+use MrDellimore\SheetStream\Concerns\WithReaderOptions;
+use OpenSpout\Reader\CSV\Options;
+
+class CsvImport implements WithReaderOptions
+{
+    public function readerOptions(): object
+    {
+        $options = new Options;
+        $options->FIELD_DELIMITER = ';';
+        $options->FIELD_ENCLOSURE = "'";
+        return $options;
+    }
+}
+```
+
+### ShouldQueue
+
+**Laravel Excel** uses `Illuminate\Contracts\Queue\ShouldQueue` on the import/export class itself.
+
+**Sheet Stream** uses its own `MrDellimore\SheetStream\Concerns\ShouldQueue` marker interface. When implemented, `import()` and `store()` automatically dispatch to the queue:
+
+```diff
+- use Illuminate\Contracts\Queue\ShouldQueue;
++ use MrDellimore\SheetStream\Concerns\ShouldQueue;
+
+  class UsersImport implements ToModel, WithHeadingRow, ShouldQueue
+  {
++     public ?string $queue = 'imports';   // optional
++     public ?int $timeout = 600;          // optional
+      // ...
+  }
+```
+
+Queue config properties (`$queue`, `$connection`, `$tries`, `$timeout`) are set as public properties on your class, rather than using Laravel Excel's `ShouldQueue` trait methods.
+
 ### Facade / entry point
 
 ```diff
@@ -96,6 +216,16 @@ Sheet Stream streams every import by default. There is no `WithChunkReading` con
 
 - return Excel::download(new UsersExport, 'users.xlsx');
 + return SheetStream::download(new UsersExport, 'users.xlsx');
+
+- Excel::store(new UsersExport, 'exports/users.xlsx', 's3');
++ SheetStream::store(new UsersExport, 'exports/users.xlsx', disk: 's3');
+```
+
+Sheet Stream also adds two explicit queue methods not available in Laravel Excel:
+
+```php
+SheetStream::queueImport(new UsersImport, 'imports/users.xlsx', disk: 's3');
+SheetStream::queueExport(new UsersExport, 'exports/users.xlsx', disk: 's3');
 ```
 
 ## Unsupported Laravel Excel features
@@ -104,15 +234,13 @@ These Laravel Excel features are **not available** in Sheet Stream. If your impo
 
 | Feature | Status | Workaround |
 |---|---|---|
-| `.xls` (legacy binary) | Not supported (engine limit) | Convert to `.xlsx` before import |
+| `.xls` (legacy binary) | Use `phpspreadsheet` driver | Set `default_reader` to `'phpspreadsheet'` |
 | `FromView` | Not supported | Use `FromCollection` or `FromQuery` |
-| `WithStyles` / `WithColumnFormatting` | Planned (v0.6) | — |
-| `ShouldQueue` | Planned (v0.5) | Run in a job manually |
-| `WithColumnWidths` / auto-sizing | Not supported | — |
+| `WithStyles` (cell-range) | Row/column styles only | Use `WithHeadingStyle`, `WithDefaultRowStyle`, `WithColumnStyles` |
+| `WithColumnWidths` / auto-sizing | Not supported | Use `WithWriterOptions` with XLSX Options for column widths |
 | `WithDrawings` / `WithCharts` | Not supported (engine limit) | — |
 | Formula recalculation | Cached values only | — |
 | `RemembersRowNumber` | Not supported | — |
-| `WithCustomCsvSettings` | Not supported | — |
 
 ## Step-by-step example
 
