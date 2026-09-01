@@ -7,7 +7,6 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use MrDellimore\SheetStream\Concerns\SkipsEmptyRows;
@@ -16,6 +15,7 @@ use MrDellimore\SheetStream\Concerns\WithMultipleSheets;
 use MrDellimore\SheetStream\Concerns\WithReaderOptions;
 use MrDellimore\SheetStream\Engine\Contracts\SheetReader;
 use MrDellimore\SheetStream\Engine\EngineFactory;
+use MrDellimore\SheetStream\Staging\StagingStore;
 
 /**
  * Phase 1 of the staging-table pattern.
@@ -52,6 +52,7 @@ class StagingProducerJob implements ShouldQueue
     {
         $importId = Str::uuid()->toString();
         $localPath = $this->resolveLocalPath();
+        $store = app(StagingStore::class);
 
         try {
             $driver = config('sheet-stream.default_reader', 'openspout');
@@ -67,7 +68,7 @@ class StagingProducerJob implements ShouldQueue
                         continue;
                     }
 
-                    $chunksDispatched = $this->stageSheet($importId, $sheetIndex, $sheetReader->name(), $subImport, $sheetReader);
+                    $chunksDispatched = $this->stageSheet($store, $importId, $sheetIndex, $sheetReader->name(), $subImport, $sheetReader);
 
                     for ($chunk = 0; $chunk < $chunksDispatched; $chunk++) {
                         StagingChunkProcessorJob::dispatch(
@@ -88,10 +89,11 @@ class StagingProducerJob implements ShouldQueue
     }
 
     /**
-     * Bulk-inserts all data rows from one sheet into the staging table.
+     * Stages all data rows from one sheet via the configured StagingStore.
      * Returns the number of distinct chunk numbers created (= jobs to dispatch).
      */
     private function stageSheet(
+        StagingStore $store,
         string $importId,
         int $sheetIndex,
         string $sheetName,
@@ -100,7 +102,6 @@ class StagingProducerJob implements ShouldQueue
     ): int {
         $hasHeadingRow = $subImport instanceof WithHeadingRow;
         $skipsEmpty = $subImport instanceof SkipsEmptyRows;
-        $stagingTable = config('sheet-stream.staging.table', 'sheet_stream_staging');
         $now = now()->toDateTimeString();
 
         $headings = null;
@@ -144,20 +145,18 @@ class StagingProducerJob implements ShouldQueue
                 'sheet_name' => $sheetName,
                 'chunk_number' => $chunkNumber,
                 'row_number' => $rowNumber,
-                'row_data' => json_encode($row),
+                'row_data' => $row,
                 'created_at' => $now,
             ];
 
             if (count($batch) >= $this->insertBatchSize) {
-                // Wrap each write in a transaction so databases that auto-commit
-                // per statement (e.g. SQLite) don't pay a sync penalty per row.
-                DB::transaction(fn () => DB::table($stagingTable)->insert($batch));
+                $store->insertBatch($batch);
                 $batch = [];
             }
         }
 
         if ($batch !== []) {
-            DB::transaction(fn () => DB::table($stagingTable)->insert($batch));
+            $store->insertBatch($batch);
         }
 
         return $maxChunk + 1; // total chunk count (0 if no rows)

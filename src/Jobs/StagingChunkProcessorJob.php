@@ -9,7 +9,6 @@ use Illuminate\Foundation\Bus\PendingDispatch;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use MrDellimore\SheetStream\Concerns\SkipsOnFailure;
@@ -19,6 +18,7 @@ use MrDellimore\SheetStream\Concerns\ToModel;
 use MrDellimore\SheetStream\Concerns\WithBatchInserts;
 use MrDellimore\SheetStream\Concerns\WithValidation;
 use MrDellimore\SheetStream\Imports\Failure;
+use MrDellimore\SheetStream\Staging\StagingStore;
 
 /**
  * Phase 2 of the staging-table pattern.
@@ -56,16 +56,9 @@ class StagingChunkProcessorJob implements ShouldQueue
 
     public function handle(): void
     {
-        $stagingTable = config('sheet-stream.staging.table', 'sheet_stream_staging');
+        $store = app(StagingStore::class);
 
-        $rows = DB::table($stagingTable)
-            ->where('import_id', $this->importId)
-            ->where('sheet_index', $this->sheetIndex)
-            ->where('chunk_number', $this->chunkNumber)
-            ->whereNull('processed_at')
-            ->whereNull('failed_at')
-            ->orderBy('row_number')
-            ->get();
+        $rows = $store->readChunk($this->importId, $this->sheetIndex, $this->chunkNumber);
 
         if ($rows->isEmpty()) {
             return;
@@ -86,7 +79,7 @@ class StagingChunkProcessorJob implements ShouldQueue
         $failures = [];
 
         foreach ($rows as $staged) {
-            $row = json_decode($staged->row_data, true);
+            $row = $staged->row_data;
 
             if ($hasValidation) {
                 $validator = Validator::make($row, $rules);
@@ -94,10 +87,7 @@ class StagingChunkProcessorJob implements ShouldQueue
                 if ($validator->fails()) {
                     if ($skipsOnFailure) {
                         $failures[] = new Failure($staged->row_number, $validator->errors()->toArray(), $row);
-                        DB::table($stagingTable)->where('id', $staged->id)->update([
-                            'failed_at' => now(),
-                            'error' => $validator->errors()->toJson(),
-                        ]);
+                        $store->markFailed($staged->id, $validator->errors()->toJson());
 
                         continue;
                     }
@@ -121,7 +111,7 @@ class StagingChunkProcessorJob implements ShouldQueue
                 $buffer[] = $row;
             }
 
-            DB::table($stagingTable)->where('id', $staged->id)->update(['processed_at' => now()]);
+            $store->markProcessed($staged->id);
         }
 
         if ($isToModel && $modelBuffer !== []) {
@@ -137,6 +127,8 @@ class StagingChunkProcessorJob implements ShouldQueue
         } elseif ($isToCollection) {
             $this->sheetImport->collection(new Collection($buffer));
         }
+
+        $store->cleanupChunk($this->importId, $this->sheetIndex, $this->chunkNumber);
     }
 
     /** @param \Illuminate\Database\Eloquent\Model[] $models */
