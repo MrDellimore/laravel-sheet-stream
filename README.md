@@ -27,9 +27,10 @@ streaming rows one at a time — memory stays flat regardless of file size.
 
 | | |
 |---|---|
-| PHP | `^8.2` |
+| PHP | `^8.3` |
 | Laravel | `^11.0 \| ^12.0 \| ^13.0` |
 | OpenSpout | `^4.30` |
+| Extensions | `ext-zip`, `ext-xmlreader` |
 
 ---
 
@@ -43,6 +44,13 @@ Laravel auto-discovers the service provider. To publish the config file:
 
 ```bash
 php artisan vendor:publish --tag=sheet-stream-config
+```
+
+If you plan to use the [staging pipeline](#staging-pipeline) for large queued imports, also publish and run the migrations:
+
+```bash
+php artisan vendor:publish --tag=sheet-stream-migrations
+php artisan migrate
 ```
 
 ---
@@ -194,6 +202,8 @@ class ClaimantsExport implements FromQuery, WithHeadings, WithMapping
 | `WithMultipleSheets` | Route each sheet to a different import object |
 | `WithReaderOptions` | Pass native OpenSpout reader options (CSV delimiter, encoding, etc.) |
 | `ShouldQueue` | Dispatch the import to a queue worker |
+| `UsesStagingTable` | Two-phase staging pipeline for very large queued imports ([details](#staging-pipeline)) |
+| `WithParallelSheets` | Dispatch one job per sheet for queued multi-sheet imports (combine with `WithMultipleSheets` + `ShouldQueue`) |
 
 ### Export concerns
 
@@ -240,15 +250,48 @@ class ClaimantsExport implements FromQuery, WithHeadings, WithMapping
 return [
     'default_reader' => 'openspout',
     'default_writer' => 'openspout',
-    'batch_size'     => 1000,   // rows per DB insert buffer (ToModel)
-    'chunk_size'     => 1000,   // rows per lazy-load chunk (FromQuery)
+    'batch_size'     => 1000,   // rows per DB insert batch (ToModel)
+    'chunk_size'     => 1000,   // rows per queued chunk job
     'temp_path'      => null,   // null = sys_get_temp_dir()
     'dates' => [
-        'coerce'   => true,
-        'timezone' => null,
+        'coerce'          => true,
+        'timezone'        => null,
+        'format'          => 'yyyy-mm-dd',             // Excel number format for date-only exports
+        'datetime_format' => 'yyyy-mm-dd hh:mm:ss',   // Excel number format for date+time exports
+    ],
+    'staging' => [
+        'driver'           => env('SHEET_STREAM_STAGING_DRIVER', 'database'), // 'database' or 'file'
+        'table'            => 'sheet_stream_staging',   // table name (database driver)
+        'path'             => null,                     // base path (file driver); null = temp_path
+        'insert_batch_size' => 500,                     // rows per bulk INSERT in the producer job
     ],
 ];
 ```
+
+---
+
+## Staging pipeline
+
+For very large queued imports (millions of rows), the `UsesStagingTable` concern switches to a two-phase producer-consumer pattern:
+
+1. **Producer job** — streams the file and bulk-inserts all rows into a staging table.
+2. **Chunk-processor jobs** — dispatched in parallel, each processing a pre-assigned chunk.
+
+```php
+use MrDellimore\SheetStream\Concerns\ToModel;
+use MrDellimore\SheetStream\Concerns\ShouldQueue;
+use MrDellimore\SheetStream\Concerns\UsesStagingTable;
+
+class MassiveImport implements ToModel, ShouldQueue, UsesStagingTable
+{
+    public function model(array $row): Claimant
+    {
+        return new Claimant($row);
+    }
+}
+```
+
+This requires the staging migrations to be published and run (see [Installation](#installation)). Choose between `database` and `file` staging drivers via the `staging.driver` config key. For full details, see [docs/staging-pipeline.md](docs/staging-pipeline.md).
 
 ---
 
