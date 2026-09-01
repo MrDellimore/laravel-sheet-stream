@@ -1,0 +1,19 @@
+<?php
+
+return [
+    'default_reader' => 'openspout',   // 'openspout' (streaming) or 'phpspreadsheet' (full-featured)
+    'default_writer' => 'openspout',   // 'openspout' (streaming) or 'phpspreadsheet' (.xls support)
+    'batch_size' => 1000,              // rows per DB insert batch (ToModel imports)
+    'chunk_size' => 1000,              // rows per queued chunk job
+    'temp_path' => null,               // null = sys_get_temp_dir()
+    'dates' => [
+        'coerce' => true,              // sane date coercion by default
+        'timezone' => null,
+    ],
+
+    // Staging-table pattern (UsesStagingTable concern)
+    'staging' => [
+        'table' => 'sheet_stream_staging',  // staging table name
+        'insert_batch_size' => 500,          // rows per bulk INSERT in the producer job
+    ],
+];
