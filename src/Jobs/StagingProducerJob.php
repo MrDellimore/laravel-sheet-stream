@@ -9,12 +9,15 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Str;
 use MrDellimore\SheetStream\Concerns\SkipsEmptyRows;
+use MrDellimore\SheetStream\Concerns\WithCsvPreConversion;
 use MrDellimore\SheetStream\Concerns\WithHeadingRow;
 use MrDellimore\SheetStream\Concerns\WithReaderOptions;
 use MrDellimore\SheetStream\Engine\Contracts\SheetReader;
 use MrDellimore\SheetStream\Engine\EngineFactory;
 use MrDellimore\SheetStream\Staging\StagingStore;
 use MrDellimore\SheetStream\Support\ConfiguresFromConcern;
+use MrDellimore\SheetStream\Support\ConversionResult;
+use MrDellimore\SheetStream\Support\CsvConverter;
 use MrDellimore\SheetStream\Support\ResolvesTempFile;
 use MrDellimore\SheetStream\Support\RowHelper;
 use MrDellimore\SheetStream\Support\SheetResolver;
@@ -43,22 +46,69 @@ class StagingProducerJob implements ShouldQueue
         $importId = Str::uuid()->toString();
         $localPath = $this->resolveLocalPath('sheet_stream_staging_');
         $store = app(StagingStore::class);
+        $conversion = null;
 
         try {
-            $driver = config('sheet-stream.default_reader', 'openspout');
-            $nativeOptions = $this->import instanceof WithReaderOptions ? $this->import->readerOptions() : null;
-            $reader = EngineFactory::reader($driver, $this->readerOptions, $nativeOptions);
-            $reader->open($localPath);
+            if ($this->shouldPreConvert($localPath)) {
+                $conversion = (new CsvConverter)->convert($localPath);
+                $this->stageConvertedSheets($store, $importId, $conversion);
+            } else {
+                $this->stageFromReader($store, $importId, $localPath);
+            }
+        } finally {
+            $conversion?->cleanup();
+            $this->cleanupTempFile($localPath);
+        }
+    }
+
+    private function shouldPreConvert(string $localPath): bool
+    {
+        if (! ($this->import instanceof WithCsvPreConversion)) {
+            return false;
+        }
+
+        $extension = strtolower(pathinfo($localPath, PATHINFO_EXTENSION));
+
+        if (! in_array($extension, ['xlsx', 'ods'], true)) {
+            return false;
+        }
+
+        return (new CsvConverter)->isAvailable();
+    }
+
+    private function stageFromReader(StagingStore $store, string $importId, string $localPath): void
+    {
+        $driver = config('sheet-stream.default_reader', 'openspout');
+        $nativeOptions = $this->import instanceof WithReaderOptions ? $this->import->readerOptions() : null;
+        $reader = EngineFactory::reader($driver, $this->readerOptions, $nativeOptions);
+        $reader->open($localPath);
+
+        try {
+            foreach ($reader->sheets() as $sheetIndex => $sheetReader) {
+                $this->processSheet($store, $importId, $sheetIndex, $sheetReader->name(), $sheetReader);
+            }
+        } finally {
+            $reader->close();
+        }
+    }
+
+    private function stageConvertedSheets(StagingStore $store, string $importId, ConversionResult $conversion): void
+    {
+        foreach ($conversion->csvPaths as $sheetIndex => $csvPath) {
+            $sheetName = $conversion->sheetNames[$sheetIndex] ?? "Sheet {$sheetIndex}";
+
+            $subImport = SheetResolver::resolve($this->import, $sheetIndex, $sheetName);
+
+            if ($subImport === null) {
+                continue;
+            }
+
+            $reader = EngineFactory::reader('openspout', $this->readerOptions);
+            $reader->open($csvPath);
 
             try {
-                foreach ($reader->sheets() as $sheetIndex => $sheetReader) {
-                    $subImport = SheetResolver::resolve($this->import, $sheetIndex, $sheetReader->name());
-
-                    if ($subImport === null) {
-                        continue;
-                    }
-
-                    $chunksDispatched = $this->stageSheet($store, $importId, $sheetIndex, $sheetReader->name(), $subImport, $sheetReader);
+                foreach ($reader->sheets() as $sheetReader) {
+                    $chunksDispatched = $this->stageSheet($store, $importId, $sheetIndex, $sheetName, $subImport, $sheetReader);
 
                     for ($chunk = 0; $chunk < $chunksDispatched; $chunk++) {
                         StagingChunkProcessorJob::dispatch(
@@ -69,12 +119,33 @@ class StagingProducerJob implements ShouldQueue
                             chunkNumber: $chunk,
                         );
                     }
+
+                    break; // CSV only has one "sheet"
                 }
             } finally {
                 $reader->close();
             }
-        } finally {
-            $this->cleanupTempFile($localPath);
+        }
+    }
+
+    private function processSheet(StagingStore $store, string $importId, int $sheetIndex, string $sheetName, SheetReader $sheetReader): void
+    {
+        $subImport = SheetResolver::resolve($this->import, $sheetIndex, $sheetName);
+
+        if ($subImport === null) {
+            return;
+        }
+
+        $chunksDispatched = $this->stageSheet($store, $importId, $sheetIndex, $sheetName, $subImport, $sheetReader);
+
+        for ($chunk = 0; $chunk < $chunksDispatched; $chunk++) {
+            StagingChunkProcessorJob::dispatch(
+                import: $this->import,
+                sheetImport: $subImport,
+                importId: $importId,
+                sheetIndex: $sheetIndex,
+                chunkNumber: $chunk,
+            );
         }
     }
 

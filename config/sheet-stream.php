@@ -20,4 +20,10 @@ return [
         'path' => null,                      // base path (file driver); null = temp_path/sheet_stream_staging
         'insert_batch_size' => 500,          // rows per bulk INSERT in the producer job
     ],
+
+    // CSV pre-conversion (WithCsvPreConversion concern)
+    'csv_converter' => [
+        'binary' => env('SHEET_STREAM_CSV_CONVERTER'),  // null = auto-detect (ssconvert, xlsx2csv)
+        'timeout' => 3600,                               // max seconds for the conversion process
+    ],
 ];
