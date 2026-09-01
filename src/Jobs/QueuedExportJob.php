@@ -39,7 +39,7 @@ class QueuedExportJob implements ShouldQueue
 
         try {
             $nativeOptions = $this->export instanceof WithWriterOptions ? $this->export->writerOptions() : null;
-            $writer = EngineFactory::writer($driver, $this->extension, nativeOptions: $nativeOptions);
+            $writer = EngineFactory::writer($driver, $this->extension, [], $nativeOptions);
             $writer->openToFile($tmp);
 
             $runner = new ExportRunner($this->chunkSize);
