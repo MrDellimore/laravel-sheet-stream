@@ -63,4 +63,4 @@ jobs:
         run: vendor/bin/phpstan analyse --no-progress
 
       - name: Run tests (Pest)
-        run: vendor/bin/pest --no-coverage
+        run: vendor/bin/pest --no-coverage --exclude-group=benchmark
