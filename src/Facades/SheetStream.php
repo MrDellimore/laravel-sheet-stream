@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrDellimore\SheetStream\Facades;
 
 use Illuminate\Support\Facades\Facade;

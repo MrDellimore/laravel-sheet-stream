@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrDellimore\SheetStream\Concerns;
 
 use OpenSpout\Reader\XLSX\Options;

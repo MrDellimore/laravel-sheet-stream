@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrDellimore\SheetStream\Engine\PhpSpreadsheet;
 
 use MrDellimore\SheetStream\Engine\Contracts\Writer;
@@ -16,11 +18,11 @@ use PhpOffice\PhpSpreadsheet\Writer\Csv;
  */
 final class PhpSpreadsheetWriter implements Writer
 {
-    private Spreadsheet $spreadsheet;
+    private readonly Spreadsheet $spreadsheet;
 
     private string $path = '';
 
-    private string $extension;
+    private readonly string $extension;
 
     private int $currentRow = 1;
 

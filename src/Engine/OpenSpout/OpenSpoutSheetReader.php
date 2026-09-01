@@ -9,7 +9,7 @@ use MrDellimore\SheetStream\Engine\Contracts\SheetReader;
 use OpenSpout\Common\Entity\Row;
 use OpenSpout\Reader\SheetInterface;
 
-final class OpenSpoutSheetReader implements SheetReader
+final readonly class OpenSpoutSheetReader implements SheetReader
 {
     private ?DateTimeZone $timezone;
 
@@ -54,7 +54,7 @@ final class OpenSpoutSheetReader implements SheetReader
                 continue;
             }
 
-            if ($this->timezone !== null) {
+            if ($this->timezone instanceof DateTimeZone) {
                 $cells = $this->applyTimezone($cells);
             }
 

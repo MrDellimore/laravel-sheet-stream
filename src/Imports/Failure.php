@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrDellimore\SheetStream\Imports;
 
 /**
@@ -13,9 +15,9 @@ class Failure
      * @param  array<string, mixed>  $values  The original row values that failed.
      */
     public function __construct(
-        private int $row,
-        private array $errors,
-        private array $values = [],
+        private readonly int $row,
+        private readonly array $errors,
+        private readonly array $values = [],
     ) {}
 
     /** The 1-based row number in the spreadsheet. */

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrDellimore\SheetStream\Support;
 
 use Illuminate\Database\Eloquent\Model;

@@ -18,7 +18,7 @@ use MrDellimore\SheetStream\Exceptions\InvalidConcernCombination;
 class ExportRunner
 {
     public function __construct(
-        private int $chunkSize = 1000,
+        private readonly int $chunkSize = 1000,
     ) {}
 
     public function run(object $export, Writer $writer): void

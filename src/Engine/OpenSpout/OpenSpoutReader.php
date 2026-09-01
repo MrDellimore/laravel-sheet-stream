@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrDellimore\SheetStream\Engine\OpenSpout;
 
 use MrDellimore\SheetStream\Engine\Contracts\Reader;
@@ -18,8 +20,8 @@ final class OpenSpoutReader implements Reader
     private ReaderInterface $reader;
 
     public function __construct(
-        private array $options = [],
-        private ?object $nativeOptions = null,
+        private readonly array $options = [],
+        private readonly ?object $nativeOptions = null,
     ) {}
 
     public function open(string $path): void

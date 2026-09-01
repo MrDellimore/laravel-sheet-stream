@@ -23,7 +23,7 @@ use MrDellimore\SheetStream\Support\SheetResolver;
 class ImportRunner
 {
     public function __construct(
-        private int $defaultBatchSize = 1000,
+        private readonly int $defaultBatchSize = 1000,
     ) {}
 
     public function runSheet(object $import, SheetReader $sheetReader): void

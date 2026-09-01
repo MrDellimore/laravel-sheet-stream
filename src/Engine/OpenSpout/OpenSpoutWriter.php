@@ -19,7 +19,7 @@ use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
 
 final class OpenSpoutWriter implements Writer
 {
-    private WriterInterface $writer;
+    private readonly WriterInterface $writer;
 
     private bool $firstSheet = true;
 
@@ -36,8 +36,8 @@ final class OpenSpoutWriter implements Writer
     public function __construct(
         string $extension = 'xlsx',
         ?object $nativeOptions = null,
-        private string $dateFormat = 'yyyy-mm-dd',
-        private string $dateTimeFormat = 'yyyy-mm-dd hh:mm:ss',
+        private readonly string $dateFormat = 'yyyy-mm-dd',
+        private readonly string $dateTimeFormat = 'yyyy-mm-dd hh:mm:ss',
     ) {
         $this->writer = $this->createWriterForExtension(
             strtolower($extension),
@@ -95,7 +95,7 @@ final class OpenSpoutWriter implements Writer
             }
         }
 
-        if ($hasDates || $columnStyles !== [] || $style !== null) {
+        if ($hasDates || $columnStyles !== [] || $style instanceof Style) {
             $this->writer->addRow(new Row($cellObjects));
         } else {
             $this->writer->addRow(Row::fromValues($cells));

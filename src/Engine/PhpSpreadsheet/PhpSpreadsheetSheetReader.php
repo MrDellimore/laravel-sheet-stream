@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrDellimore\SheetStream\Engine\PhpSpreadsheet;
 
 use DateTimeImmutable;
@@ -8,7 +10,7 @@ use DateTimeZone;
 use MrDellimore\SheetStream\Engine\Contracts\SheetReader;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-final class PhpSpreadsheetSheetReader implements SheetReader
+final readonly class PhpSpreadsheetSheetReader implements SheetReader
 {
     private ?DateTimeZone $timezone;
 
@@ -34,7 +36,7 @@ final class PhpSpreadsheetSheetReader implements SheetReader
                 $value = $cell->getValue();
 
                 if ($value instanceof DateTimeInterface) {
-                    if ($this->timezone !== null) {
+                    if ($this->timezone instanceof DateTimeZone) {
                         $value = $value instanceof DateTimeImmutable
                             ? $value->setTimezone($this->timezone)
                             : DateTimeImmutable::createFromInterface($value)->setTimezone($this->timezone);
