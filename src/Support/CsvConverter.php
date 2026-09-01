@@ -11,6 +11,24 @@ use ZipArchive;
 
 final class CsvConverter
 {
+    public function __construct(
+        private readonly ?string $binary = null,
+        private readonly ?string $tempDir = null,
+        private readonly int $timeoutSeconds = 3600,
+    ) {}
+
+    /**
+     * Create an instance using the Laravel config values.
+     */
+    public static function fromConfig(): self
+    {
+        return new self(
+            binary: config('sheet-stream.csv_converter.binary'),
+            tempDir: config('sheet-stream.temp_path'),
+            timeoutSeconds: (int) config('sheet-stream.csv_converter.timeout', 3600),
+        );
+    }
+
     /**
      * Convert an XLSX or ODS file to one CSV per sheet.
      */
@@ -39,15 +57,13 @@ final class CsvConverter
 
     private function resolveBinary(): string
     {
-        $configured = config('sheet-stream.csv_converter.binary');
-
-        if ($configured !== null && $configured !== '') {
-            if ($this->binaryExists($configured)) {
-                return $configured;
+        if ($this->binary !== null && $this->binary !== '') {
+            if ($this->binaryExists($this->binary)) {
+                return $this->binary;
             }
 
             throw new CsvConversionException(
-                "Configured CSV converter not found: {$configured}"
+                "Configured CSV converter not found: {$this->binary}"
             );
         }
 
@@ -120,6 +136,11 @@ final class CsvConverter
         return $names;
     }
 
+    private function resolveTempDir(): string
+    {
+        return $this->tempDir ?? sys_get_temp_dir();
+    }
+
     /**
      * @return array<int, string>  CSV paths indexed by sheet index
      */
@@ -139,12 +160,11 @@ final class CsvConverter
      */
     private function convertWithSsconvert(string $binary, string $spreadsheetPath, int $expectedSheets): array
     {
-        $tempDir = config('sheet-stream.temp_path') ?? sys_get_temp_dir();
-        $baseName = $tempDir.'/sheet_stream_csv_'.uniqid();
+        $baseName = $this->resolveTempDir().'/sheet_stream_csv_'.uniqid();
         $outputPattern = $baseName.'.csv';
 
         $process = new Process([$binary, '-S', $spreadsheetPath, $outputPattern]);
-        $process->setTimeout($this->timeout());
+        $process->setTimeout($this->timeoutSeconds);
         $process->run();
 
         if (! $process->isSuccessful()) {
@@ -154,13 +174,16 @@ final class CsvConverter
         }
 
         // ssconvert with -S creates: base.csv.0, base.csv.1, etc.
+        // Rename to .csv so OpenSpout recognises the extension.
         $paths = [];
 
         for ($i = 0; $i < $expectedSheets; $i++) {
-            $path = $baseName.".csv.{$i}";
+            $ssconvertPath = $baseName.".csv.{$i}";
 
-            if (file_exists($path)) {
-                $paths[$i] = $path;
+            if (file_exists($ssconvertPath)) {
+                $csvPath = $baseName."_sheet{$i}.csv";
+                rename($ssconvertPath, $csvPath);
+                $paths[$i] = $csvPath;
             }
         }
 
@@ -185,8 +208,7 @@ final class CsvConverter
      */
     private function convertWithXlsx2csv(string $binary, string $spreadsheetPath, int $expectedSheets): array
     {
-        $tempDir = config('sheet-stream.temp_path') ?? sys_get_temp_dir();
-        $baseName = $tempDir.'/sheet_stream_csv_'.uniqid();
+        $baseName = $this->resolveTempDir().'/sheet_stream_csv_'.uniqid();
 
         // xlsx2csv can export all sheets with -s 0 and -n for sheet-specific output
         $paths = [];
@@ -196,7 +218,7 @@ final class CsvConverter
 
             // xlsx2csv uses 1-based sheet numbers
             $process = new Process([$binary, '-s', (string) ($i + 1), $spreadsheetPath, $outputPath]);
-            $process->setTimeout($this->timeout());
+            $process->setTimeout($this->timeoutSeconds);
             $process->run();
 
             if ($process->isSuccessful() && file_exists($outputPath)) {
@@ -211,10 +233,5 @@ final class CsvConverter
         }
 
         return $paths;
-    }
-
-    private function timeout(): int
-    {
-        return (int) config('sheet-stream.csv_converter.timeout', 3600);
     }
 }

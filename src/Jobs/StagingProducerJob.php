@@ -50,7 +50,7 @@ class StagingProducerJob implements ShouldQueue
 
         try {
             if ($this->shouldPreConvert($localPath)) {
-                $conversion = (new CsvConverter)->convert($localPath);
+                $conversion = (CsvConverter::fromConfig())->convert($localPath);
                 $this->stageConvertedSheets($store, $importId, $conversion);
             } else {
                 $this->stageFromReader($store, $importId, $localPath);
@@ -73,7 +73,7 @@ class StagingProducerJob implements ShouldQueue
             return false;
         }
 
-        return (new CsvConverter)->isAvailable();
+        return (CsvConverter::fromConfig())->isAvailable();
     }
 
     private function stageFromReader(StagingStore $store, string $importId, string $localPath): void
