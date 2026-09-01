@@ -4,6 +4,10 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use MrDellimore\SheetStream\Concerns\ShouldQueue;
+use MrDellimore\SheetStream\Concerns\SkipsEmptyRows;
+use MrDellimore\SheetStream\Concerns\ToArray;
+use MrDellimore\SheetStream\Concerns\UsesStagingTable;
 use MrDellimore\SheetStream\Jobs\StagingChunkProcessorJob;
 use MrDellimore\SheetStream\Jobs\StagingProducerJob;
 use MrDellimore\SheetStream\Tests\Fixtures\StagingArrayImport;
@@ -194,11 +198,7 @@ it('staging pipeline skips empty rows before inserting', function () {
     ]);
 
     // Use a no-heading import that also skips empty rows
-    $import = new class implements
-        \MrDellimore\SheetStream\Concerns\ShouldQueue,
-        \MrDellimore\SheetStream\Concerns\ToArray,
-        \MrDellimore\SheetStream\Concerns\UsesStagingTable,
-        \MrDellimore\SheetStream\Concerns\SkipsEmptyRows
+    $import = new class implements ShouldQueue, SkipsEmptyRows, ToArray, UsesStagingTable
     {
         public array $result = [];
 

@@ -45,6 +45,13 @@ interface StagingStore
     public function markProcessed(mixed $rowId): void;
 
     /**
+     * Mark multiple rows as successfully processed in a single operation.
+     *
+     * @param  array<int, mixed>  $rowIds
+     */
+    public function markProcessedBatch(array $rowIds): void;
+
+    /**
      * Mark a single row as failed, recording the error JSON.
      */
     public function markFailed(mixed $rowId, string $errorJson): void;

@@ -1,5 +1,9 @@
 <?php
 
+use Illuminate\Support\Collection;
+use MrDellimore\SheetStream\Concerns\FromCollection;
+use MrDellimore\SheetStream\Concerns\WithHeadings;
+use MrDellimore\SheetStream\Concerns\WithMapping;
 use MrDellimore\SheetStream\Engine\OpenSpout\OpenSpoutReader;
 use MrDellimore\SheetStream\Engine\OpenSpout\OpenSpoutWriter;
 use MrDellimore\SheetStream\Exports\ExportRunner;
@@ -182,14 +186,11 @@ it('handles mixed date and non-date rows in exports via ExportRunner', function 
     $tmp = tempnam(sys_get_temp_dir(), 'mixed_export_').'.xlsx';
 
     try {
-        $export = new class implements
-            \MrDellimore\SheetStream\Concerns\FromCollection,
-            \MrDellimore\SheetStream\Concerns\WithHeadings,
-            \MrDellimore\SheetStream\Concerns\WithMapping
+        $export = new class implements FromCollection, WithHeadings, WithMapping
         {
-            public function collection(): \Illuminate\Support\Collection
+            public function collection(): Collection
             {
-                return new \Illuminate\Support\Collection([
+                return new Collection([
                     ['name' => 'Alice', 'joined' => new DateTimeImmutable('2025-01-15'), 'score' => 95],
                     ['name' => 'Bob', 'joined' => new DateTimeImmutable('2025-03-20 09:30:00'), 'score' => 87],
                 ]);

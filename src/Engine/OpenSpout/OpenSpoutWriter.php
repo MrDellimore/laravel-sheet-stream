@@ -77,56 +77,29 @@ final class OpenSpoutWriter implements Writer
     {
         $style = $rowStyle instanceof Style ? $rowStyle : null;
 
-        if ($this->containsDates($cells)) {
-            $this->writer->addRow($this->buildRowWithDates($cells, $rowStyle, $columnStyles));
-        } elseif ($columnStyles !== []) {
-            $this->writer->addRow(Row::fromValuesWithStyles($cells, $style, $columnStyles));
-        } elseif ($style !== null) {
-            $this->writer->addRow(Row::fromValues($cells, $style));
-        } else {
-            $this->writer->addRow(Row::fromValues($cells));
-        }
-    }
-
-    private function containsDates(array $cells): bool
-    {
-        foreach ($cells as $value) {
-            if ($value instanceof DateTimeInterface) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Build a Row with proper date format styles applied to DateTimeInterface values.
-     * This ensures dates survive an XLSX round-trip as DateTimeCell with format metadata.
-     */
-    private function buildRowWithDates(array $cells, ?object $rowStyle, array $columnStyles): Row
-    {
+        // Single-pass: build typed Cell objects, applying date format styles as needed.
+        // This avoids a separate containsDates() scan followed by a second buildRowWithDates() pass.
+        $hasDates = false;
         $cellObjects = [];
 
         foreach (array_values($cells) as $index => $value) {
-            $colStyle = $columnStyles[$index] ?? $rowStyle;
+            $colStyle = $columnStyles[$index] ?? $style;
 
             if ($value instanceof DateTimeInterface) {
-                $style = $this->resolveDateStyle($value, $colStyle);
-                $cellObjects[] = new Cell\DateTimeCell($value, $style);
+                $hasDates = true;
+                $cellObjects[] = new Cell\DateTimeCell($value, $this->resolveDateStyle($value, $colStyle));
+            } elseif ($colStyle instanceof Style) {
+                $cellObjects[] = Cell::fromValue($value, $colStyle);
             } else {
-                $cell = Cell::fromValue($value);
-
-                if ($colStyle instanceof Style) {
-                    // Merge the column/row style onto the cell
-                    $merged = (new Style())->setFormat($colStyle->getFormat() ?? '');
-                    $cellObjects[] = Cell::fromValue($value, $merged);
-                } else {
-                    $cellObjects[] = $cell;
-                }
+                $cellObjects[] = Cell::fromValue($value);
             }
         }
 
-        return new Row($cellObjects);
+        if ($hasDates || $columnStyles !== [] || $style !== null) {
+            $this->writer->addRow(new Row($cellObjects));
+        } else {
+            $this->writer->addRow(Row::fromValues($cells));
+        }
     }
 
     /**
@@ -143,10 +116,10 @@ final class OpenSpoutWriter implements Writer
         $hasTime = $value->format('H:i:s') !== '00:00:00';
 
         if ($hasTime) {
-            return $this->dateTimeStyle ??= (new Style())->setFormat($this->dateTimeFormat);
+            return $this->dateTimeStyle ??= (new Style)->setFormat($this->dateTimeFormat);
         }
 
-        return $this->dateStyle ??= (new Style())->setFormat($this->dateFormat);
+        return $this->dateStyle ??= (new Style)->setFormat($this->dateFormat);
     }
 
     public function close(): void

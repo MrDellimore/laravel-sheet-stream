@@ -89,6 +89,11 @@ class FileStagingStore implements StagingStore
         // No-op — the chunk file is cleaned up after the consumer finishes.
     }
 
+    public function markProcessedBatch(array $rowIds): void
+    {
+        // No-op — the chunk file is cleaned up after the consumer finishes.
+    }
+
     public function markFailed(mixed $rowId, string $errorJson): void
     {
         // No-op — failures are reported via SkipsOnFailure::onFailure().

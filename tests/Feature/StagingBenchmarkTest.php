@@ -33,6 +33,7 @@ use MrDellimore\SheetStream\Concerns\ShouldQueue;
 use MrDellimore\SheetStream\Concerns\ToArray;
 use MrDellimore\SheetStream\Concerns\UsesStagingTable;
 use MrDellimore\SheetStream\Concerns\WithHeadingRow;
+use MrDellimore\SheetStream\Concerns\WithMultipleSheets;
 use MrDellimore\SheetStream\Jobs\StagingChunkProcessorJob;
 use MrDellimore\SheetStream\Jobs\StagingProducerJob;
 
@@ -73,8 +74,10 @@ it('benchmarks the staging pipeline against a large xlsx file', function () {
     $fileSizeMb = round(filesize($benchFile) / 1024 / 1024, 1);
 
     // No-op per-sheet import — counts rows without storing them, so memory stays flat.
-    $sheetImport = new class implements ShouldQueue, ToArray, WithHeadingRow, UsesStagingTable {
+    $sheetImport = new class implements ShouldQueue, ToArray, UsesStagingTable, WithHeadingRow
+    {
         public int $totalRows = 0;
+
         public int $chunksCalled = 0;
 
         public function array(array $array): void
@@ -86,7 +89,8 @@ it('benchmarks the staging pipeline against a large xlsx file', function () {
 
     // WithMultipleSheets wrapper that routes every sheet (by numeric index 0–9)
     // to the same no-op import, ensuring all sheets in the file are processed.
-    $import = new class ($sheetImport) implements ShouldQueue, \MrDellimore\SheetStream\Concerns\WithMultipleSheets, UsesStagingTable {
+    $import = new class($sheetImport) implements ShouldQueue, UsesStagingTable, WithMultipleSheets
+    {
         public function __construct(private readonly object $sheet) {}
 
         public function sheets(): array

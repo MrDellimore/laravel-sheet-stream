@@ -24,7 +24,7 @@ final class EngineFactory
         };
     }
 
-    public static function writer(string $driver, string $extension, ?object $nativeOptions = null, array $options = []): Writer
+    public static function writer(string $driver, string $extension, array $options = [], ?object $nativeOptions = null): Writer
     {
         return match ($driver) {
             'openspout' => new OpenSpoutWriter(

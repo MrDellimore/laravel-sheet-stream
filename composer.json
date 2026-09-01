@@ -7,7 +7,7 @@
         { "name": "Andrew M. Dellimore", "email": "andrewdellimore@gmail.com" }
     ],
     "require": {
-        "php": "^8.2",
+        "php": "^8.3",
         "ext-zip": "*",
         "ext-xmlreader": "*",
         "openspout/openspout": "^4.30",

@@ -49,6 +49,15 @@ class DatabaseStagingStore implements StagingStore
         DB::table($this->table)->where('id', $rowId)->update(['processed_at' => now()]);
     }
 
+    public function markProcessedBatch(array $rowIds): void
+    {
+        if ($rowIds === []) {
+            return;
+        }
+
+        DB::table($this->table)->whereIn('id', $rowIds)->update(['processed_at' => now()]);
+    }
+
     public function markFailed(mixed $rowId, string $errorJson): void
     {
         DB::table($this->table)->where('id', $rowId)->update([

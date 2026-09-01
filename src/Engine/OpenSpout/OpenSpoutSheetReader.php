@@ -6,6 +6,7 @@ use DateTimeImmutable;
 use DateTimeInterface;
 use DateTimeZone;
 use MrDellimore\SheetStream\Engine\Contracts\SheetReader;
+use OpenSpout\Common\Entity\Row;
 use OpenSpout\Reader\SheetInterface;
 
 final class OpenSpoutSheetReader implements SheetReader
@@ -132,7 +133,7 @@ final class OpenSpoutSheetReader implements SheetReader
      *
      * @return array<int, scalar|null|DateTimeInterface>
      */
-    private function safeToArray(\OpenSpout\Common\Entity\Row $row): array
+    private function safeToArray(Row $row): array
     {
         try {
             return $row->toArray();

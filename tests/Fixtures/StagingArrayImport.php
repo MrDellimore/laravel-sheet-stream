@@ -19,7 +19,7 @@ use MrDellimore\SheetStream\Concerns\WithHeadingRow;
  * (DB, Redis, etc.). This fixture works because tests run chunk
  * jobs synchronously on the same object instance.
  */
-class StagingArrayImport implements ShouldQueue, ToArray, WithHeadingRow, UsesStagingTable
+class StagingArrayImport implements ShouldQueue, ToArray, UsesStagingTable, WithHeadingRow
 {
     public array $result = [];
 

@@ -5,7 +5,6 @@ namespace MrDellimore\SheetStream\Jobs;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Foundation\Bus\PendingDispatch;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Collection;
@@ -19,23 +18,12 @@ use MrDellimore\SheetStream\Concerns\WithBatchInserts;
 use MrDellimore\SheetStream\Concerns\WithValidation;
 use MrDellimore\SheetStream\Imports\Failure;
 use MrDellimore\SheetStream\Staging\StagingStore;
+use MrDellimore\SheetStream\Support\ConfiguresFromConcern;
+use MrDellimore\SheetStream\Support\RowHelper;
 
-/**
- * Phase 2 of the staging-table pattern.
- *
- * Reads all pre-assigned rows for one (importId, sheetIndex, chunkNumber) from
- * the staging table, runs the import logic (validation, model save / array collect),
- * and marks each row processed or failed.
- *
- * Many of these jobs run in parallel across Horizon workers.
- *
- * Note for ToArray / ToCollection imports: your array() / collection() method will
- * be called once per chunk, not once for the entire sheet. Design your handler to
- * accumulate or process incrementally (e.g. upsert to a results table).
- */
 class StagingChunkProcessorJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use ConfiguresFromConcern, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public ?int $tries = null;
 
@@ -48,10 +36,7 @@ class StagingChunkProcessorJob implements ShouldQueue
         public readonly int $sheetIndex,
         public readonly int $chunkNumber,
     ) {
-        $this->tries = $sheetImport->tries ?? $import->tries ?? null;
-        $this->timeout = $sheetImport->timeout ?? $import->timeout ?? null;
-        $this->onQueue($sheetImport->queue ?? $import->queue ?? null);
-        $this->onConnection($sheetImport->connection ?? $import->connection ?? null);
+        $this->applyJobConfig($sheetImport, $import);
     }
 
     public function handle(): void
@@ -77,6 +62,7 @@ class StagingChunkProcessorJob implements ShouldQueue
         $buffer = [];
         $modelBuffer = [];
         $failures = [];
+        $processedIds = [];
 
         foreach ($rows as $staged) {
             $row = $staged->row_data;
@@ -103,7 +89,7 @@ class StagingChunkProcessorJob implements ShouldQueue
                     $modelBuffer[] = $model;
 
                     if (count($modelBuffer) >= $batchSize) {
-                        $this->flushModels($modelBuffer);
+                        RowHelper::flushModels($modelBuffer);
                         $modelBuffer = [];
                     }
                 }
@@ -111,11 +97,15 @@ class StagingChunkProcessorJob implements ShouldQueue
                 $buffer[] = $row;
             }
 
-            $store->markProcessed($staged->id);
+            $processedIds[] = $staged->id;
+        }
+
+        if ($processedIds !== []) {
+            $store->markProcessedBatch($processedIds);
         }
 
         if ($isToModel && $modelBuffer !== []) {
-            $this->flushModels($modelBuffer);
+            RowHelper::flushModels($modelBuffer);
         }
 
         if ($skipsOnFailure && $failures !== []) {
@@ -129,13 +119,5 @@ class StagingChunkProcessorJob implements ShouldQueue
         }
 
         $store->cleanupChunk($this->importId, $this->sheetIndex, $this->chunkNumber);
-    }
-
-    /** @param \Illuminate\Database\Eloquent\Model[] $models */
-    private function flushModels(array $models): void
-    {
-        foreach ($models as $model) {
-            $model->save();
-        }
     }
 }

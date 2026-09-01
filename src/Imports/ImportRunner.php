@@ -2,7 +2,6 @@
 
 namespace MrDellimore\SheetStream\Imports;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -18,6 +17,8 @@ use MrDellimore\SheetStream\Concerns\WithValidation;
 use MrDellimore\SheetStream\Engine\Contracts\Reader;
 use MrDellimore\SheetStream\Engine\Contracts\SheetReader;
 use MrDellimore\SheetStream\Exceptions\InvalidConcernCombination;
+use MrDellimore\SheetStream\Support\RowHelper;
+use MrDellimore\SheetStream\Support\SheetResolver;
 
 class ImportRunner
 {
@@ -25,10 +26,6 @@ class ImportRunner
         private int $defaultBatchSize = 1000,
     ) {}
 
-    /**
-     * Process a single already-resolved sheet reader against a sub-import.
-     * Used by QueuedSheetImportJob when sheet-level parallelism is active.
-     */
     public function runSheet(object $import, SheetReader $sheetReader): void
     {
         $this->validateConcerns($import);
@@ -37,30 +34,20 @@ class ImportRunner
 
     public function run(object $import, Reader $reader): void
     {
-        $subImports = $import instanceof WithMultipleSheets ? $import->sheets() : [$import];
+        $cachedSheets = $import instanceof WithMultipleSheets ? $import->sheets() : null;
+        $subImports = $cachedSheets ?? [$import];
 
         foreach ($subImports as $subImport) {
             $this->validateConcerns($subImport);
         }
 
         foreach ($reader->sheets() as $sheetIndex => $sheetReader) {
-            $subImport = $this->resolveSheetImport($import, $sheetIndex, $sheetReader->name());
+            $subImport = SheetResolver::resolve($import, $sheetIndex, $sheetReader->name(), $cachedSheets);
 
             if ($subImport !== null) {
                 $this->processSheet($subImport, $sheetReader);
             }
         }
-    }
-
-    private function resolveSheetImport(object $import, int $sheetIndex, string $sheetName): ?object
-    {
-        if ($import instanceof WithMultipleSheets) {
-            $sheets = $import->sheets();
-
-            return $sheets[$sheetIndex] ?? $sheets[$sheetName] ?? null;
-        }
-
-        return $sheetIndex === 0 ? $import : null;
     }
 
     private function processSheet(object $import, SheetReader $sheetReader): void
@@ -91,22 +78,19 @@ class ImportRunner
             $rawRow = array_values($rawRow);
 
             if ($headings === null && $hasHeadingRow) {
-                $headings = array_map(fn ($h) => mb_strtolower(trim((string) $h)), $rawRow);
+                $headings = RowHelper::normalizeHeadings($rawRow);
                 $headingCount = count($headings);
 
                 continue;
             }
 
-            if ($skipsEmpty && $this->isEmptyRow($rawRow)) {
+            if ($skipsEmpty && RowHelper::isEmptyRow($rawRow)) {
                 continue;
             }
 
-            if ($headings !== null) {
-                $padded = array_pad($rawRow, $headingCount, null);
-                $row = array_combine($headings, array_slice($padded, 0, $headingCount));
-            } else {
-                $row = $rawRow;
-            }
+            $row = $headings !== null
+                ? RowHelper::keyRow($rawRow, $headings, $headingCount)
+                : $rawRow;
 
             if ($hasValidation) {
                 $validator = Validator::make($row, $rules);
@@ -129,7 +113,7 @@ class ImportRunner
                     $buffer[] = $model;
 
                     if (count($buffer) >= $batchSize) {
-                        $this->flushModels($buffer);
+                        RowHelper::flushModels($buffer);
                         $buffer = [];
                     }
                 }
@@ -141,7 +125,7 @@ class ImportRunner
         }
 
         if ($isToModel && $buffer !== []) {
-            $this->flushModels($buffer);
+            RowHelper::flushModels($buffer);
         }
 
         if ($skipsOnFailure && $failures !== []) {
@@ -152,14 +136,6 @@ class ImportRunner
             $import->array($buffer);
         } elseif ($isToCollection) {
             $import->collection(new Collection($buffer));
-        }
-    }
-
-    /** @param Model[] $models */
-    private function flushModels(array $models): void
-    {
-        foreach ($models as $model) {
-            $model->save();
         }
     }
 
@@ -186,16 +162,5 @@ class ImportRunner
                 'SkipsOnFailure requires WithValidation to also be implemented.'
             );
         }
-    }
-
-    private function isEmptyRow(array $row): bool
-    {
-        foreach ($row as $cell) {
-            if ($cell !== null && $cell !== '') {
-                return false;
-            }
-        }
-
-        return true;
     }
 }

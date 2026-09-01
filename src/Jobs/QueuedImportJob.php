@@ -7,16 +7,17 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Storage;
 use MrDellimore\SheetStream\Concerns\WithMultipleSheets;
 use MrDellimore\SheetStream\Concerns\WithParallelSheets;
 use MrDellimore\SheetStream\Concerns\WithReaderOptions;
 use MrDellimore\SheetStream\Engine\EngineFactory;
 use MrDellimore\SheetStream\Imports\ImportRunner;
+use MrDellimore\SheetStream\Support\ConfiguresFromConcern;
+use MrDellimore\SheetStream\Support\ResolvesTempFile;
 
 class QueuedImportJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use ConfiguresFromConcern, Dispatchable, InteractsWithQueue, Queueable, ResolvesTempFile, SerializesModels;
 
     public ?int $tries = null;
 
@@ -29,23 +30,18 @@ class QueuedImportJob implements ShouldQueue
         public array $readerOptions = [],
         public int $batchSize = 1000,
     ) {
-        $this->tries = $import->tries ?? null;
-        $this->timeout = $import->timeout ?? null;
-        $this->onQueue($import->queue ?? null);
-        $this->onConnection($import->connection ?? null);
+        $this->applyJobConfig($import);
     }
 
     public function handle(): void
     {
-        // Sheet-level parallelism: dispatch one job per sheet, then return.
-        // Each sheet job independently resolves the file and processes its sheet.
         if ($this->import instanceof WithMultipleSheets && $this->import instanceof WithParallelSheets) {
             $this->dispatchSheetJobs();
 
             return;
         }
 
-        $localPath = $this->resolveLocalPath();
+        $localPath = $this->resolveLocalPath('sheet_stream_import_');
 
         try {
             $driver = config('sheet-stream.default_reader', 'openspout');
@@ -64,13 +60,9 @@ class QueuedImportJob implements ShouldQueue
         }
     }
 
-    /**
-     * Open the file, discover sheets, and dispatch one QueuedSheetImportJob per sheet.
-     * The current job acts purely as a coordinator — row processing happens in the sheet jobs.
-     */
     private function dispatchSheetJobs(): void
     {
-        $localPath = $this->resolveLocalPath();
+        $localPath = $this->resolveLocalPath('sheet_stream_import_');
 
         try {
             $driver = config('sheet-stream.default_reader', 'openspout');
@@ -101,33 +93,6 @@ class QueuedImportJob implements ShouldQueue
             }
         } finally {
             $this->cleanupTempFile($localPath);
-        }
-    }
-
-    private function resolveLocalPath(): string
-    {
-        if ($this->disk === null) {
-            return $this->filePath;
-        }
-
-        $tempDir = config('sheet-stream.temp_path') ?? sys_get_temp_dir();
-        $tempPath = tempnam($tempDir, 'sheet_stream_import_');
-        $stream = Storage::disk($this->disk)->readStream($this->filePath);
-        $local = fopen($tempPath, 'wb');
-        stream_copy_to_stream($stream, $local);
-        fclose($local);
-
-        if (is_resource($stream)) {
-            fclose($stream);
-        }
-
-        return $tempPath;
-    }
-
-    private function cleanupTempFile(string $localPath): void
-    {
-        if ($this->disk !== null) {
-            @unlink($localPath);
         }
     }
 }

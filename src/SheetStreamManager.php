@@ -157,7 +157,7 @@ class SheetStreamManager
     {
         $driver = (string) ($this->app['config']['sheet-stream.default_writer'] ?? 'openspout');
         $nativeOptions = $export instanceof WithWriterOptions ? $export->writerOptions() : null;
-        $writer = EngineFactory::writer($driver, $extension, $nativeOptions, $this->writerOptions());
+        $writer = EngineFactory::writer($driver, $extension, $this->writerOptions(), $nativeOptions);
         $tmp = tempnam($this->tempPath(), 'sheet_stream_');
         $writer->openToFile($tmp);
 

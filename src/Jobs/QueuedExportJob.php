@@ -11,10 +11,11 @@ use Illuminate\Support\Facades\Storage;
 use MrDellimore\SheetStream\Concerns\WithWriterOptions;
 use MrDellimore\SheetStream\Engine\EngineFactory;
 use MrDellimore\SheetStream\Exports\ExportRunner;
+use MrDellimore\SheetStream\Support\ConfiguresFromConcern;
 
 class QueuedExportJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use ConfiguresFromConcern, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public ?int $tries = null;
 
@@ -27,10 +28,7 @@ class QueuedExportJob implements ShouldQueue
         public string $extension = 'xlsx',
         public int $chunkSize = 1000,
     ) {
-        $this->tries = $export->tries ?? null;
-        $this->timeout = $export->timeout ?? null;
-        $this->onQueue($export->queue ?? null);
-        $this->onConnection($export->connection ?? null);
+        $this->applyJobConfig($export);
     }
 
     public function handle(): void
@@ -41,7 +39,7 @@ class QueuedExportJob implements ShouldQueue
 
         try {
             $nativeOptions = $this->export instanceof WithWriterOptions ? $this->export->writerOptions() : null;
-            $writer = EngineFactory::writer($driver, $this->extension, $nativeOptions);
+            $writer = EngineFactory::writer($driver, $this->extension, nativeOptions: $nativeOptions);
             $writer->openToFile($tmp);
 
             $runner = new ExportRunner($this->chunkSize);
