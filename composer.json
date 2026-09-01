@@ -15,12 +15,13 @@
         "illuminate/database": "^11.0 || ^12.0 || ^13.0"
     },
     "require-dev": {
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.20",
         "orchestra/testbench": "^9.0 || ^10.0 || ^11.0",
         "pestphp/pest": "^4.0",
         "phpoffice/phpspreadsheet": "^2.0 || ^3.0 || ^4.0",
-        "laravel/pint": "^1.20",
-        "larastan/larastan": "^3.0",
-        "phpstan/phpstan": "^2.0"
+        "phpstan/phpstan": "^2.0",
+        "rector/rector": "^2.6"
     },
     "suggest": {
         "phpoffice/phpspreadsheet": "Required for the phpspreadsheet engine driver (.xls support, formula evaluation, charts)"
