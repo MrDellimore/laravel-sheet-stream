@@ -18,14 +18,21 @@ final class PhpSpreadsheetReader implements Reader
 {
     private Spreadsheet $spreadsheet;
 
+    private bool $calculateFormulas;
+
     public function __construct(
         private array $options = [],
-    ) {}
+    ) {
+        $this->calculateFormulas = (bool) ($options['calculateFormulas'] ?? false);
+    }
 
     public function open(string $path): void
     {
         $reader = IOFactory::createReaderForFile($path);
-        $reader->setReadDataOnly(true);
+
+        if (! $this->calculateFormulas) {
+            $reader->setReadDataOnly(true);
+        }
 
         $this->spreadsheet = $reader->load($path);
     }
@@ -36,7 +43,7 @@ final class PhpSpreadsheetReader implements Reader
         $tz = $this->options['dates']['timezone'] ?? null;
 
         foreach ($this->spreadsheet->getAllSheets() as $worksheet) {
-            yield new PhpSpreadsheetSheetReader($worksheet, $tz);
+            yield new PhpSpreadsheetSheetReader($worksheet, $tz, $this->calculateFormulas);
         }
     }
 

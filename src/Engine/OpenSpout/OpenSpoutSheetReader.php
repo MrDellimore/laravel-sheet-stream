@@ -6,6 +6,7 @@ use DateTimeImmutable;
 use DateTimeInterface;
 use DateTimeZone;
 use MrDellimore\SheetStream\Engine\Contracts\SheetReader;
+use OpenSpout\Common\Entity\Cell\FormulaCell;
 use OpenSpout\Common\Entity\Row;
 use OpenSpout\Reader\SheetInterface;
 
@@ -13,12 +14,15 @@ final readonly class OpenSpoutSheetReader implements SheetReader
 {
     private ?DateTimeZone $timezone;
 
+    private bool $calculateFormulas;
+
     public function __construct(
         private SheetInterface $sheet,
         array $options = [],
     ) {
         $tz = $options['dates']['timezone'] ?? null;
         $this->timezone = $tz !== null ? new DateTimeZone($tz) : null;
+        $this->calculateFormulas = (bool) ($options['calculateFormulas'] ?? false);
     }
 
     public function name(): string
@@ -131,25 +135,33 @@ final readonly class OpenSpoutSheetReader implements SheetReader
      * value cannot be read (e.g. OpenSpout's InvalidValueException on a
      * date serial that falls outside the valid Excel range).
      *
+     * When calculateFormulas is enabled, FormulaCell instances return their
+     * cached computed value instead of the formula string.
+     *
      * @return array<int, scalar|null|DateTimeInterface>
      */
     private function safeToArray(Row $row): array
     {
-        try {
-            return $row->toArray();
-        } catch (\Throwable) {
-            $cells = [];
-
-            foreach ($row->getCells() as $cell) {
-                try {
-                    $cells[] = $cell->getValue();
-                } catch (\Throwable) {
-                    $cells[] = null;
-                }
+        if (! $this->calculateFormulas) {
+            try {
+                return $row->toArray();
+            } catch (\Throwable) {
             }
-
-            return $cells;
         }
+
+        $cells = [];
+
+        foreach ($row->getCells() as $cell) {
+            try {
+                $cells[] = $cell instanceof FormulaCell
+                    ? $cell->getComputedValue()
+                    : $cell->getValue();
+            } catch (\Throwable) {
+                $cells[] = null;
+            }
+        }
+
+        return $cells;
     }
 
     private function applyTimezone(array $cells): array

@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Storage;
 use MrDellimore\SheetStream\Concerns\FromView;
 use MrDellimore\SheetStream\Concerns\ShouldQueue;
 use MrDellimore\SheetStream\Concerns\UsesStagingTable;
+use MrDellimore\SheetStream\Concerns\WithCalculatedFormulas;
 use MrDellimore\SheetStream\Concerns\WithMultipleSheets;
 use MrDellimore\SheetStream\Concerns\WithReaderOptions;
 use MrDellimore\SheetStream\Concerns\WithWriterOptions;
@@ -36,7 +37,7 @@ class SheetStreamManager
 
         $driver = (string) ($this->app['config']['sheet-stream.default_reader'] ?? 'openspout');
         $nativeOptions = $import instanceof WithReaderOptions ? $import->readerOptions() : null;
-        $reader = EngineFactory::reader($driver, $this->readerOptions(), $nativeOptions);
+        $reader = EngineFactory::reader($driver, $this->readerOptions($import), $nativeOptions);
         $reader->open($path);
 
         $bus = EventBus::for($import);
@@ -128,7 +129,7 @@ class SheetStreamManager
                 import: $import,
                 filePath: $path,
                 disk: $disk,
-                readerOptions: $this->readerOptions(),
+                readerOptions: $this->readerOptions($import),
                 chunkSize: (int) ($this->app['config']['sheet-stream.chunk_size'] ?? 1000),
                 insertBatchSize: (int) ($this->app['config']['sheet-stream.staging.insert_batch_size'] ?? 500),
             ));
@@ -138,7 +139,7 @@ class SheetStreamManager
             import: $import,
             filePath: $path,
             disk: $disk,
-            readerOptions: $this->readerOptions(),
+            readerOptions: $this->readerOptions($import),
             batchSize: (int) ($this->app['config']['sheet-stream.batch_size'] ?? 1000),
         ));
     }
@@ -215,13 +216,14 @@ class SheetStreamManager
         return $tmp;
     }
 
-    private function readerOptions(): array
+    private function readerOptions(object $import): array
     {
         return [
             'dates' => [
                 'coerce' => (bool) ($this->app['config']['sheet-stream.dates.coerce'] ?? true),
                 'timezone' => $this->app['config']['sheet-stream.dates.timezone'] ?? null,
             ],
+            'calculateFormulas' => $import instanceof WithCalculatedFormulas,
         ];
     }
 

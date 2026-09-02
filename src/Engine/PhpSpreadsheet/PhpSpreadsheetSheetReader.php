@@ -17,6 +17,7 @@ final readonly class PhpSpreadsheetSheetReader implements SheetReader
     public function __construct(
         private Worksheet $worksheet,
         ?string $timezone = null,
+        private bool $calculateFormulas = false,
     ) {
         $this->timezone = $timezone !== null ? new DateTimeZone($timezone) : null;
     }
@@ -33,7 +34,9 @@ final readonly class PhpSpreadsheetSheetReader implements SheetReader
             $cells = [];
 
             foreach ($row->getCellIterator() as $cell) {
-                $value = $cell->getValue();
+                $value = $this->calculateFormulas
+                    ? $cell->getCalculatedValue()
+                    : $cell->getValue();
 
                 if ($value instanceof DateTimeInterface) {
                     if ($this->timezone instanceof DateTimeZone) {
