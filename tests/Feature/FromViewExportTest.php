@@ -23,6 +23,7 @@ it('exports a Blade view to xlsx via PhpSpreadsheet driver', function () {
     $export = new ViewExport($rows);
 
     $tmp = tempnam(sys_get_temp_dir(), 'from_view_test_').'.xlsx';
+    $spreadsheet = null;
 
     try {
         $writer = new PhpSpreadsheetWriter('xlsx');
@@ -33,26 +34,21 @@ it('exports a Blade view to xlsx via PhpSpreadsheet driver', function () {
         expect(file_exists($tmp))->toBeTrue()
             ->and(filesize($tmp))->toBeGreaterThan(0);
 
-        // Re-read with PhpSpreadsheet to verify content
         $spreadsheet = IOFactory::load($tmp);
         $sheet = $spreadsheet->getActiveSheet();
 
         expect($sheet->getTitle())->toBe('Summary');
 
-        // Row 1: headers from <th>
         expect($sheet->getCell('A1')->getValue())->toBe('Name')
             ->and($sheet->getCell('B1')->getValue())->toBe('Email');
 
-        // Row 2: first data row
         expect($sheet->getCell('A2')->getValue())->toBe('Alice')
             ->and($sheet->getCell('B2')->getValue())->toBe('alice@example.com');
 
-        // Row 3: second data row
         expect($sheet->getCell('A3')->getValue())->toBe('Bob')
             ->and($sheet->getCell('B3')->getValue())->toBe('bob@example.com');
-
-        $spreadsheet->disconnectWorksheets();
     } finally {
+        $spreadsheet?->disconnectWorksheets();
         @unlink($tmp);
     }
 });
@@ -117,7 +113,6 @@ it('exports a view with styled HTML', function () {
     {
         public function view(): View
         {
-            // Return a view with inline styling
             return view('sheet-stream-tests::styled-export-table');
         }
 
@@ -128,6 +123,7 @@ it('exports a view with styled HTML', function () {
     };
 
     $tmp = tempnam(sys_get_temp_dir(), 'styled_view_test_').'.xlsx';
+    $spreadsheet = null;
 
     try {
         $writer = new PhpSpreadsheetWriter('xlsx');
@@ -138,16 +134,13 @@ it('exports a view with styled HTML', function () {
         $spreadsheet = IOFactory::load($tmp);
         $sheet = $spreadsheet->getActiveSheet();
 
-        // The header should be bold (from <th> or <b> tags)
         expect($sheet->getCell('A1')->getValue())->toBe('Status')
             ->and($sheet->getCell('B1')->getValue())->toBe('Count');
 
-        // Data values should be present
         expect($sheet->getCell('A2')->getValue())->toBe('Active')
             ->and($sheet->getCell('B2')->getValue())->not->toBeNull();
-
-        $spreadsheet->disconnectWorksheets();
     } finally {
+        $spreadsheet?->disconnectWorksheets();
         @unlink($tmp);
     }
 });

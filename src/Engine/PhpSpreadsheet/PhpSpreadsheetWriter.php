@@ -81,19 +81,12 @@ final class PhpSpreadsheetWriter implements Writer
     {
         $sheetIndex = $this->spreadsheet->getIndex($this->currentSheet);
 
-        $tmpFile = tempnam(sys_get_temp_dir(), 'sheet_stream_html_').'.html';
-        file_put_contents($tmpFile, $html);
+        $reader = new Html;
+        $reader->setSheetIndex($sheetIndex);
+        $reader->loadFromString($html, $this->spreadsheet);
 
-        try {
-            /** @var Html $reader */
-            $reader = IOFactory::createReader('Html');
-            $reader->setSheetIndex($sheetIndex);
-            $reader->loadIntoExisting($tmpFile, $this->spreadsheet);
-        } finally {
-            @unlink($tmpFile);
-        }
-
-        // The Html reader may have changed the active sheet; restore our reference.
+        // PhpSpreadsheet's Html reader always calls setActiveSheetIndex internally, which can
+        // invalidate our $currentSheet reference if the spreadsheet's internal active sheet changes.
         $this->currentSheet = $this->spreadsheet->getSheet($sheetIndex);
     }
 

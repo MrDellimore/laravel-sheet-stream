@@ -8,6 +8,8 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Storage;
+use MrDellimore\SheetStream\Concerns\FromView;
+use MrDellimore\SheetStream\Concerns\WithMultipleSheets;
 use MrDellimore\SheetStream\Concerns\WithWriterOptions;
 use MrDellimore\SheetStream\Engine\EngineFactory;
 use MrDellimore\SheetStream\Exports\ExportRunner;
@@ -31,9 +33,28 @@ class QueuedExportJob implements ShouldQueue
         $this->applyJobConfig($export);
     }
 
+    private function resolveDriver(): string
+    {
+        $configured = config('sheet-stream.default_writer', 'openspout');
+
+        if ($this->export instanceof FromView) {
+            return 'phpspreadsheet';
+        }
+
+        if ($this->export instanceof WithMultipleSheets) {
+            foreach ($this->export->sheets() as $sheet) {
+                if ($sheet instanceof FromView) {
+                    return 'phpspreadsheet';
+                }
+            }
+        }
+
+        return $configured;
+    }
+
     public function handle(): void
     {
-        $driver = config('sheet-stream.default_writer', 'openspout');
+        $driver = $this->resolveDriver();
         $tempDir = config('sheet-stream.temp_path') ?? sys_get_temp_dir();
         $tmp = tempnam($tempDir, 'sheet_stream_export_');
 
