@@ -74,6 +74,7 @@ class ImportRunner
         $hasValidation = $import instanceof WithValidation;
         $skipsOnFailure = $import instanceof SkipsOnFailure;
         $remembersRowNumber = method_exists($import, 'setRowNumber');
+        $remembersChunkOffset = method_exists($import, 'setChunkOffset');
 
         $batchSize = $import instanceof WithBatchInserts
             ? $import->batchSize()
@@ -89,6 +90,7 @@ class ImportRunner
         $rowNumber = 0;
         $chunkNumber = 0;
         $rowsInChunk = 0;
+        $needsChunkOffset = true;
 
         foreach ($sheetReader->rows() as $rawRow) {
             $rowNumber++;
@@ -127,6 +129,11 @@ class ImportRunner
                 $import->setRowNumber($rowNumber);
             }
 
+            if ($remembersChunkOffset && $needsChunkOffset) {
+                $import->setChunkOffset($rowNumber);
+                $needsChunkOffset = false;
+            }
+
             if ($isToModel) {
                 $model = $import->model($row);
 
@@ -139,6 +146,7 @@ class ImportRunner
                         $bus?->dispatch(new AfterChunk($import, $sheetIndex, $chunkNumber, $rowsInChunk));
                         $chunkNumber++;
                         $rowsInChunk = 0;
+                        $needsChunkOffset = true;
                         $buffer = [];
                     }
                 }
@@ -153,6 +161,7 @@ class ImportRunner
                 $bus?->dispatch(new AfterChunk($import, $sheetIndex, $chunkNumber, $rowsInChunk));
                 $chunkNumber++;
                 $rowsInChunk = 0;
+                $needsChunkOffset = true;
             }
         }
 

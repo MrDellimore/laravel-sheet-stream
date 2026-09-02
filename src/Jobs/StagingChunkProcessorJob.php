@@ -66,6 +66,7 @@ class StagingChunkProcessorJob implements ShouldQueue
         $rules = $hasValidation ? $this->sheetImport->rules() : [];
 
         $remembersRowNumber = method_exists($this->sheetImport, 'setRowNumber');
+        $remembersChunkOffset = method_exists($this->sheetImport, 'setChunkOffset');
 
         $buffer = [];
         $modelBuffer = [];
@@ -73,6 +74,10 @@ class StagingChunkProcessorJob implements ShouldQueue
         $processedIds = [];
 
         try {
+            if ($remembersChunkOffset && $rows->isNotEmpty()) {
+                $this->sheetImport->setChunkOffset($rows->first()->row_number);
+            }
+
             foreach ($rows as $staged) {
                 $row = $staged->row_data;
 

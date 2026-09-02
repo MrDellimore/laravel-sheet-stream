@@ -4,4 +4,6 @@ includes:
 parameters:
     paths:
         - src
+        - tests/Fixtures/RowNumberTrackingImport.php
+        - tests/Fixtures/ChunkOffsetTrackingImport.php
     level: 5
