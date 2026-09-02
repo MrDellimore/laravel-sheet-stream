@@ -32,7 +32,7 @@ it('throws when import has no output concern', function () {
     } finally {
         $reader->close();
     }
-})->throws(InvalidConcernCombination::class, 'at least one of: ToModel, ToArray, or ToCollection');
+})->throws(InvalidConcernCombination::class, 'at least one of: OnEachRow, ToModel, ToArray, or ToCollection');
 
 it('throws when import has multiple output concerns', function () {
     $import = new class implements ToArray, ToCollection
@@ -55,7 +55,7 @@ it('throws when import has multiple output concerns', function () {
     } finally {
         $reader->close();
     }
-})->throws(InvalidConcernCombination::class, 'only one of: ToModel, ToArray, or ToCollection');
+})->throws(InvalidConcernCombination::class, 'only one of: OnEachRow, ToModel, ToArray, or ToCollection');
 
 it('throws when SkipsOnFailure is used without WithValidation', function () {
     $import = new class implements SkipsOnFailure, ToArray
@@ -158,4 +158,4 @@ it('validates multi-sheet sub-imports eagerly', function () {
     } finally {
         $reader->close();
     }
-})->throws(InvalidConcernCombination::class, 'at least one of: ToModel, ToArray, or ToCollection');
+})->throws(InvalidConcernCombination::class, 'at least one of: OnEachRow, ToModel, ToArray, or ToCollection');

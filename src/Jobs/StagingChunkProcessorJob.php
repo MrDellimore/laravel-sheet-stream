@@ -10,6 +10,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use MrDellimore\SheetStream\Concerns\OnEachRow;
 use MrDellimore\SheetStream\Concerns\SkipsOnFailure;
 use MrDellimore\SheetStream\Concerns\ToArray;
 use MrDellimore\SheetStream\Concerns\ToCollection;
@@ -57,6 +58,7 @@ class StagingChunkProcessorJob implements ShouldQueue
         $bus = EventBus::for($this->import);
         $bus?->merge($this->sheetImport);
 
+        $isOnEachRow = $this->sheetImport instanceof OnEachRow;
         $isToModel = $this->sheetImport instanceof ToModel;
         $isToArray = $this->sheetImport instanceof ToArray;
         $isToCollection = $this->sheetImport instanceof ToCollection;
@@ -102,7 +104,9 @@ class StagingChunkProcessorJob implements ShouldQueue
                     $this->sheetImport->setRowNumber($staged->row_number);
                 }
 
-                if ($isToModel) {
+                if ($isOnEachRow) {
+                    $this->sheetImport->onRow($row);
+                } elseif ($isToModel) {
                     $model = $this->sheetImport->model($row);
 
                     if ($model !== null) {

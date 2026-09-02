@@ -5,6 +5,7 @@ namespace MrDellimore\SheetStream\Imports;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use MrDellimore\SheetStream\Concerns\OnEachRow;
 use MrDellimore\SheetStream\Concerns\SkipsEmptyRows;
 use MrDellimore\SheetStream\Concerns\SkipsOnFailure;
 use MrDellimore\SheetStream\Concerns\ToArray;
@@ -68,6 +69,7 @@ class ImportRunner
 
     private function processSheet(object $import, SheetReader $sheetReader, ?EventBus $bus = null, int $sheetIndex = 0): void
     {
+        $isOnEachRow = $import instanceof OnEachRow;
         $isToModel = $import instanceof ToModel;
         $isToArray = $import instanceof ToArray;
         $isToCollection = $import instanceof ToCollection;
@@ -136,6 +138,20 @@ class ImportRunner
                 $needsChunkOffset = false;
             }
 
+            if ($isOnEachRow) {
+                $import->onRow($row);
+                $rowsInChunk++;
+
+                if ($rowsInChunk >= $batchSize) {
+                    $bus?->dispatch(new AfterChunk($import, $sheetIndex, $chunkNumber, $rowsInChunk));
+                    $chunkNumber++;
+                    $rowsInChunk = 0;
+                    $needsChunkOffset = true;
+                }
+
+                continue;
+            }
+
             if ($isToModel) {
                 $model = $import->model($row);
 
@@ -167,10 +183,12 @@ class ImportRunner
             }
         }
 
-        if ($isToModel && $buffer !== []) {
+        if ($isOnEachRow && $rowsInChunk > 0) {
+            $bus?->dispatch(new AfterChunk($import, $sheetIndex, $chunkNumber, $rowsInChunk));
+        } elseif ($isToModel && $buffer !== []) {
             RowHelper::flushModels($buffer);
             $bus?->dispatch(new AfterChunk($import, $sheetIndex, $chunkNumber, $rowsInChunk));
-        } elseif (! $isToModel && $rowsInChunk > 0) {
+        } elseif (! $isToModel && ! $isOnEachRow && $rowsInChunk > 0) {
             $bus?->dispatch(new AfterChunk($import, $sheetIndex, $chunkNumber, $rowsInChunk));
         }
 
@@ -187,19 +205,20 @@ class ImportRunner
 
     private function validateConcerns(object $import): void
     {
-        $outputCount = ($import instanceof ToModel ? 1 : 0)
+        $outputCount = ($import instanceof OnEachRow ? 1 : 0)
+                     + ($import instanceof ToModel ? 1 : 0)
                      + ($import instanceof ToArray ? 1 : 0)
                      + ($import instanceof ToCollection ? 1 : 0);
 
         if ($outputCount === 0) {
             throw new InvalidConcernCombination(
-                'Import must implement at least one of: ToModel, ToArray, or ToCollection.'
+                'Import must implement at least one of: OnEachRow, ToModel, ToArray, or ToCollection.'
             );
         }
 
         if ($outputCount > 1) {
             throw new InvalidConcernCombination(
-                'Import must implement only one of: ToModel, ToArray, or ToCollection.'
+                'Import must implement only one of: OnEachRow, ToModel, ToArray, or ToCollection.'
             );
         }
 
