@@ -11,8 +11,10 @@ use MrDellimore\SheetStream\Concerns\WithMultipleSheets;
 use MrDellimore\SheetStream\Concerns\WithParallelSheets;
 use MrDellimore\SheetStream\Concerns\WithReaderOptions;
 use MrDellimore\SheetStream\Engine\EngineFactory;
+use MrDellimore\SheetStream\Events\ImportFailed;
 use MrDellimore\SheetStream\Imports\ImportRunner;
 use MrDellimore\SheetStream\Support\ConfiguresFromConcern;
+use MrDellimore\SheetStream\Support\EventBus;
 use MrDellimore\SheetStream\Support\ResolvesTempFile;
 
 class QueuedImportJob implements ShouldQueue
@@ -52,6 +54,11 @@ class QueuedImportJob implements ShouldQueue
             try {
                 $runner = new ImportRunner($this->batchSize);
                 $runner->run($this->import, $reader);
+            } catch (\Throwable $e) {
+                $bus = EventBus::for($this->import);
+                $bus?->dispatch(new ImportFailed($this->import, $e));
+
+                throw $e;
             } finally {
                 $reader->close();
             }

@@ -16,7 +16,13 @@ use MrDellimore\SheetStream\Concerns\WithMultipleSheets;
 use MrDellimore\SheetStream\Concerns\WithValidation;
 use MrDellimore\SheetStream\Engine\Contracts\Reader;
 use MrDellimore\SheetStream\Engine\Contracts\SheetReader;
+use MrDellimore\SheetStream\Events\AfterChunk;
+use MrDellimore\SheetStream\Events\AfterImport;
+use MrDellimore\SheetStream\Events\AfterSheet;
+use MrDellimore\SheetStream\Events\BeforeImport;
+use MrDellimore\SheetStream\Events\BeforeSheet;
 use MrDellimore\SheetStream\Exceptions\InvalidConcernCombination;
+use MrDellimore\SheetStream\Support\EventBus;
 use MrDellimore\SheetStream\Support\RowHelper;
 use MrDellimore\SheetStream\Support\SheetResolver;
 
@@ -26,10 +32,10 @@ class ImportRunner
         private readonly int $defaultBatchSize = 1000,
     ) {}
 
-    public function runSheet(object $import, SheetReader $sheetReader): void
+    public function runSheet(object $import, SheetReader $sheetReader, ?EventBus $bus = null, int $sheetIndex = 0): void
     {
         $this->validateConcerns($import);
-        $this->processSheet($import, $sheetReader);
+        $this->processSheet($import, $sheetReader, $bus, $sheetIndex);
     }
 
     public function run(object $import, Reader $reader): void
@@ -41,16 +47,24 @@ class ImportRunner
             $this->validateConcerns($subImport);
         }
 
+        $bus = EventBus::for($import);
+        $bus?->dispatch(new BeforeImport($import));
+
         foreach ($reader->sheets() as $sheetIndex => $sheetReader) {
             $subImport = SheetResolver::resolve($import, $sheetIndex, $sheetReader->name(), $cachedSheets);
 
             if ($subImport !== null) {
-                $this->processSheet($subImport, $sheetReader);
+                $sheetName = $sheetReader->name();
+                $bus?->dispatch(new BeforeSheet($subImport, $sheetIndex, $sheetName));
+                $this->processSheet($subImport, $sheetReader, $bus, $sheetIndex);
+                $bus?->dispatch(new AfterSheet($subImport, $sheetIndex, $sheetName));
             }
         }
+
+        $bus?->dispatch(new AfterImport($import));
     }
 
-    private function processSheet(object $import, SheetReader $sheetReader): void
+    private function processSheet(object $import, SheetReader $sheetReader, ?EventBus $bus = null, int $sheetIndex = 0): void
     {
         $isToModel = $import instanceof ToModel;
         $isToArray = $import instanceof ToArray;
@@ -72,6 +86,8 @@ class ImportRunner
         /** @var Failure[] $failures */
         $failures = [];
         $rowNumber = 0;
+        $chunkNumber = 0;
+        $rowsInChunk = 0;
 
         foreach ($sheetReader->rows() as $rawRow) {
             $rowNumber++;
@@ -111,9 +127,13 @@ class ImportRunner
 
                 if ($model !== null) {
                     $buffer[] = $model;
+                    $rowsInChunk++;
 
                     if (count($buffer) >= $batchSize) {
                         RowHelper::flushModels($buffer);
+                        $bus?->dispatch(new AfterChunk($import, $sheetIndex, $chunkNumber, $rowsInChunk));
+                        $chunkNumber++;
+                        $rowsInChunk = 0;
                         $buffer = [];
                     }
                 }
@@ -122,10 +142,20 @@ class ImportRunner
             }
 
             $buffer[] = $row;
+            $rowsInChunk++;
+
+            if ($rowsInChunk >= $batchSize) {
+                $bus?->dispatch(new AfterChunk($import, $sheetIndex, $chunkNumber, $rowsInChunk));
+                $chunkNumber++;
+                $rowsInChunk = 0;
+            }
         }
 
         if ($isToModel && $buffer !== []) {
             RowHelper::flushModels($buffer);
+            $bus?->dispatch(new AfterChunk($import, $sheetIndex, $chunkNumber, $rowsInChunk));
+        } elseif (! $isToModel && $rowsInChunk > 0) {
+            $bus?->dispatch(new AfterChunk($import, $sheetIndex, $chunkNumber, $rowsInChunk));
         }
 
         if ($skipsOnFailure && $failures !== []) {

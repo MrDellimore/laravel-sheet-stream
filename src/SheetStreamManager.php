@@ -11,9 +11,11 @@ use MrDellimore\SheetStream\Concerns\WithMultipleSheets;
 use MrDellimore\SheetStream\Concerns\WithReaderOptions;
 use MrDellimore\SheetStream\Concerns\WithWriterOptions;
 use MrDellimore\SheetStream\Engine\EngineFactory;
+use MrDellimore\SheetStream\Events\ImportFailed;
 use MrDellimore\SheetStream\Exceptions\UnsupportedByEngine;
 use MrDellimore\SheetStream\Exports\ExportRunner;
 use MrDellimore\SheetStream\Imports\ImportRunner;
+use MrDellimore\SheetStream\Support\EventBus;
 use MrDellimore\SheetStream\Jobs\QueuedExportJob;
 use MrDellimore\SheetStream\Jobs\QueuedImportJob;
 use MrDellimore\SheetStream\Jobs\StagingProducerJob;
@@ -39,6 +41,11 @@ class SheetStreamManager
         try {
             $runner = new ImportRunner((int) ($this->app['config']['sheet-stream.batch_size'] ?? 1000));
             $runner->run($import, $reader);
+        } catch (\Throwable $e) {
+            $bus = EventBus::for($import);
+            $bus?->dispatch(new ImportFailed($import, $e));
+
+            throw $e;
         } finally {
             $reader->close();
         }

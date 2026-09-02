@@ -13,7 +13,12 @@ use MrDellimore\SheetStream\Concerns\WithMapping;
 use MrDellimore\SheetStream\Concerns\WithMultipleSheets;
 use MrDellimore\SheetStream\Concerns\WithTitle;
 use MrDellimore\SheetStream\Engine\Contracts\Writer;
+use MrDellimore\SheetStream\Events\AfterSheet;
+use MrDellimore\SheetStream\Events\BeforeExport;
+use MrDellimore\SheetStream\Events\BeforeSheet;
+use MrDellimore\SheetStream\Events\BeforeWriting;
 use MrDellimore\SheetStream\Exceptions\InvalidConcernCombination;
+use MrDellimore\SheetStream\Support\EventBus;
 
 class ExportRunner
 {
@@ -29,10 +34,18 @@ class ExportRunner
             $this->validateConcerns($sheet);
         }
 
-        foreach ($sheets as $sheet) {
+        $bus = EventBus::for($export);
+        $bus?->dispatch(new BeforeExport($export));
+
+        foreach ($sheets as $sheetIndex => $sheet) {
+            $sheetName = $sheet instanceof WithTitle ? $sheet->title() : null;
             $this->openSheet($sheet, $writer);
+            $bus?->dispatch(new BeforeSheet($sheet, $sheetIndex, $sheetName));
             $this->writeSheet($sheet, $writer);
+            $bus?->dispatch(new AfterSheet($sheet, $sheetIndex, $sheetName));
         }
+
+        $bus?->dispatch(new BeforeWriting($export));
     }
 
     private function openSheet(object $export, Writer $writer): void

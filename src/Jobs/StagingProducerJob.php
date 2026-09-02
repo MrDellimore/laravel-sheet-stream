@@ -14,10 +14,16 @@ use MrDellimore\SheetStream\Concerns\WithHeadingRow;
 use MrDellimore\SheetStream\Concerns\WithReaderOptions;
 use MrDellimore\SheetStream\Engine\Contracts\SheetReader;
 use MrDellimore\SheetStream\Engine\EngineFactory;
+use MrDellimore\SheetStream\Events\AfterImport;
+use MrDellimore\SheetStream\Events\AfterSheet;
+use MrDellimore\SheetStream\Events\BeforeImport;
+use MrDellimore\SheetStream\Events\BeforeSheet;
+use MrDellimore\SheetStream\Events\ImportFailed;
 use MrDellimore\SheetStream\Staging\StagingStore;
 use MrDellimore\SheetStream\Support\ConfiguresFromConcern;
 use MrDellimore\SheetStream\Support\ConversionResult;
 use MrDellimore\SheetStream\Support\CsvConverter;
+use MrDellimore\SheetStream\Support\EventBus;
 use MrDellimore\SheetStream\Support\ResolvesTempFile;
 use MrDellimore\SheetStream\Support\RowHelper;
 use MrDellimore\SheetStream\Support\SheetResolver;
@@ -47,14 +53,23 @@ class StagingProducerJob implements ShouldQueue
         $localPath = $this->resolveLocalPath('sheet_stream_staging_');
         $store = app(StagingStore::class);
         $conversion = null;
+        $bus = EventBus::for($this->import);
 
         try {
+            $bus?->dispatch(new BeforeImport($this->import));
+
             if ($this->shouldPreConvert($localPath)) {
                 $conversion = (CsvConverter::fromConfig())->convert($localPath);
-                $this->stageConvertedSheets($store, $importId, $conversion);
+                $this->stageConvertedSheets($store, $importId, $conversion, $bus);
             } else {
-                $this->stageFromReader($store, $importId, $localPath);
+                $this->stageFromReader($store, $importId, $localPath, $bus);
             }
+
+            $bus?->dispatch(new AfterImport($this->import));
+        } catch (\Throwable $e) {
+            $bus?->dispatch(new ImportFailed($this->import, $e));
+
+            throw $e;
         } finally {
             $conversion?->cleanup();
             $this->cleanupTempFile($localPath);
@@ -76,7 +91,7 @@ class StagingProducerJob implements ShouldQueue
         return CsvConverter::fromConfig()->isAvailable();
     }
 
-    private function stageFromReader(StagingStore $store, string $importId, string $localPath): void
+    private function stageFromReader(StagingStore $store, string $importId, string $localPath, ?EventBus $bus): void
     {
         $driver = config('sheet-stream.default_reader', 'openspout');
         $nativeOptions = $this->import instanceof WithReaderOptions ? $this->import->readerOptions() : null;
@@ -85,14 +100,14 @@ class StagingProducerJob implements ShouldQueue
 
         try {
             foreach ($reader->sheets() as $sheetIndex => $sheetReader) {
-                $this->processSheet($store, $importId, $sheetIndex, $sheetReader->name(), $sheetReader);
+                $this->processSheet($store, $importId, $sheetIndex, $sheetReader->name(), $sheetReader, $bus);
             }
         } finally {
             $reader->close();
         }
     }
 
-    private function stageConvertedSheets(StagingStore $store, string $importId, ConversionResult $conversion): void
+    private function stageConvertedSheets(StagingStore $store, string $importId, ConversionResult $conversion, ?EventBus $bus): void
     {
         foreach ($conversion->csvPaths as $sheetIndex => $csvPath) {
             $sheetName = $conversion->sheetNames[$sheetIndex] ?? "Sheet {$sheetIndex}";
@@ -102,6 +117,8 @@ class StagingProducerJob implements ShouldQueue
             if ($subImport === null) {
                 continue;
             }
+
+            $bus?->dispatch(new BeforeSheet($subImport, $sheetIndex, $sheetName));
 
             $reader = EngineFactory::reader('openspout', $this->readerOptions);
             $reader->open($csvPath);
@@ -125,16 +142,20 @@ class StagingProducerJob implements ShouldQueue
             } finally {
                 $reader->close();
             }
+
+            $bus?->dispatch(new AfterSheet($subImport, $sheetIndex, $sheetName));
         }
     }
 
-    private function processSheet(StagingStore $store, string $importId, int $sheetIndex, string $sheetName, SheetReader $sheetReader): void
+    private function processSheet(StagingStore $store, string $importId, int $sheetIndex, string $sheetName, SheetReader $sheetReader, ?EventBus $bus): void
     {
         $subImport = SheetResolver::resolve($this->import, $sheetIndex, $sheetName);
 
         if ($subImport === null) {
             return;
         }
+
+        $bus?->dispatch(new BeforeSheet($subImport, $sheetIndex, $sheetName));
 
         $chunksDispatched = $this->stageSheet($store, $importId, $sheetIndex, $sheetName, $subImport, $sheetReader);
 
@@ -147,6 +168,8 @@ class StagingProducerJob implements ShouldQueue
                 chunkNumber: $chunk,
             );
         }
+
+        $bus?->dispatch(new AfterSheet($subImport, $sheetIndex, $sheetName));
     }
 
     private function stageSheet(

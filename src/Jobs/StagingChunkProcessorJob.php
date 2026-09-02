@@ -16,9 +16,12 @@ use MrDellimore\SheetStream\Concerns\ToCollection;
 use MrDellimore\SheetStream\Concerns\ToModel;
 use MrDellimore\SheetStream\Concerns\WithBatchInserts;
 use MrDellimore\SheetStream\Concerns\WithValidation;
+use MrDellimore\SheetStream\Events\AfterChunk;
+use MrDellimore\SheetStream\Events\ImportFailed;
 use MrDellimore\SheetStream\Imports\Failure;
 use MrDellimore\SheetStream\Staging\StagingStore;
 use MrDellimore\SheetStream\Support\ConfiguresFromConcern;
+use MrDellimore\SheetStream\Support\EventBus;
 use MrDellimore\SheetStream\Support\RowHelper;
 
 class StagingChunkProcessorJob implements ShouldQueue
@@ -49,6 +52,9 @@ class StagingChunkProcessorJob implements ShouldQueue
             return;
         }
 
+        $bus = EventBus::for($this->import);
+        $bus?->merge($this->sheetImport);
+
         $isToModel = $this->sheetImport instanceof ToModel;
         $isToArray = $this->sheetImport instanceof ToArray;
         $isToCollection = $this->sheetImport instanceof ToCollection;
@@ -64,58 +70,71 @@ class StagingChunkProcessorJob implements ShouldQueue
         $failures = [];
         $processedIds = [];
 
-        foreach ($rows as $staged) {
-            $row = $staged->row_data;
+        try {
+            foreach ($rows as $staged) {
+                $row = $staged->row_data;
 
-            if ($hasValidation) {
-                $validator = Validator::make($row, $rules);
+                if ($hasValidation) {
+                    $validator = Validator::make($row, $rules);
 
-                if ($validator->fails()) {
-                    if ($skipsOnFailure) {
-                        $failures[] = new Failure($staged->row_number, $validator->errors()->toArray(), $row);
-                        $store->markFailed($staged->id, $validator->errors()->toJson());
+                    if ($validator->fails()) {
+                        if ($skipsOnFailure) {
+                            $failures[] = new Failure($staged->row_number, $validator->errors()->toArray(), $row);
+                            $store->markFailed($staged->id, $validator->errors()->toJson());
 
-                        continue;
-                    }
+                            continue;
+                        }
 
-                    throw new ValidationException($validator);
-                }
-            }
-
-            if ($isToModel) {
-                $model = $this->sheetImport->model($row);
-
-                if ($model !== null) {
-                    $modelBuffer[] = $model;
-
-                    if (count($modelBuffer) >= $batchSize) {
-                        RowHelper::flushModels($modelBuffer);
-                        $modelBuffer = [];
+                        throw new ValidationException($validator);
                     }
                 }
-            } else {
-                $buffer[] = $row;
+
+                if ($isToModel) {
+                    $model = $this->sheetImport->model($row);
+
+                    if ($model !== null) {
+                        $modelBuffer[] = $model;
+
+                        if (count($modelBuffer) >= $batchSize) {
+                            RowHelper::flushModels($modelBuffer);
+                            $modelBuffer = [];
+                        }
+                    }
+                } else {
+                    $buffer[] = $row;
+                }
+
+                $processedIds[] = $staged->id;
             }
 
-            $processedIds[] = $staged->id;
-        }
+            if ($processedIds !== []) {
+                $store->markProcessedBatch($processedIds);
+            }
 
-        if ($processedIds !== []) {
-            $store->markProcessedBatch($processedIds);
-        }
+            if ($isToModel && $modelBuffer !== []) {
+                RowHelper::flushModels($modelBuffer);
+            }
 
-        if ($isToModel && $modelBuffer !== []) {
-            RowHelper::flushModels($modelBuffer);
-        }
+            if ($skipsOnFailure && $failures !== []) {
+                $this->sheetImport->onFailure(new Collection($failures));
+            }
 
-        if ($skipsOnFailure && $failures !== []) {
-            $this->sheetImport->onFailure(new Collection($failures));
-        }
+            if ($isToArray) {
+                $this->sheetImport->array($buffer);
+            } elseif ($isToCollection) {
+                $this->sheetImport->collection(new Collection($buffer));
+            }
 
-        if ($isToArray) {
-            $this->sheetImport->array($buffer);
-        } elseif ($isToCollection) {
-            $this->sheetImport->collection(new Collection($buffer));
+            $bus?->dispatch(new AfterChunk(
+                $this->sheetImport,
+                $this->sheetIndex,
+                $this->chunkNumber,
+                $rows->count(),
+            ));
+        } catch (\Throwable $e) {
+            $bus?->dispatch(new ImportFailed($this->import, $e));
+
+            throw $e;
         }
 
         $store->cleanupChunk($this->importId, $this->sheetIndex, $this->chunkNumber);
