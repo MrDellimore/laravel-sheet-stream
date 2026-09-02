@@ -5,6 +5,7 @@ namespace MrDellimore\SheetStream\Exports;
 use MrDellimore\SheetStream\Concerns\FromCollection;
 use MrDellimore\SheetStream\Concerns\FromGenerator;
 use MrDellimore\SheetStream\Concerns\FromQuery;
+use MrDellimore\SheetStream\Concerns\FromView;
 use MrDellimore\SheetStream\Concerns\WithColumnStyles;
 use MrDellimore\SheetStream\Concerns\WithDefaultRowStyle;
 use MrDellimore\SheetStream\Concerns\WithHeadings;
@@ -55,6 +56,12 @@ class ExportRunner
 
     private function writeSheet(object $export, Writer $writer): void
     {
+        if ($export instanceof FromView) {
+            $writer->loadHtml($export->view()->render());
+
+            return;
+        }
+
         if ($export instanceof WithHeadings) {
             $headingStyle = $export instanceof WithHeadingStyle ? $export->headingStyle() : null;
             $writer->addRow($export->headings(), $headingStyle);
@@ -75,13 +82,20 @@ class ExportRunner
 
     private function validateConcerns(object $export): void
     {
+        $isFromView = $export instanceof FromView;
         $sourceCount = ($export instanceof FromCollection ? 1 : 0)
                      + ($export instanceof FromQuery ? 1 : 0)
                      + ($export instanceof FromGenerator ? 1 : 0);
 
-        if ($sourceCount === 0) {
+        if ($isFromView && $sourceCount > 0) {
             throw new InvalidConcernCombination(
-                'Export sheet must implement at least one of: FromCollection, FromQuery, or FromGenerator.'
+                'FromView cannot be combined with FromCollection, FromQuery, or FromGenerator.'
+            );
+        }
+
+        if (! $isFromView && $sourceCount === 0) {
+            throw new InvalidConcernCombination(
+                'Export sheet must implement at least one of: FromView, FromCollection, FromQuery, or FromGenerator.'
             );
         }
 

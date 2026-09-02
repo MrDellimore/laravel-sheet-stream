@@ -99,7 +99,7 @@ it('throws when export has no data source concern', function () {
         $writer->close();
         @unlink($path);
     }
-})->throws(InvalidConcernCombination::class, 'at least one of: FromCollection, FromQuery, or FromGenerator');
+})->throws(InvalidConcernCombination::class, 'at least one of: FromView, FromCollection, FromQuery, or FromGenerator');
 
 it('throws when export has multiple data source concerns', function () {
     $export = new class implements FromCollection, FromGenerator, WithHeadings

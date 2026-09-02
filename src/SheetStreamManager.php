@@ -5,6 +5,7 @@ namespace MrDellimore\SheetStream;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Foundation\Bus\PendingDispatch;
 use Illuminate\Support\Facades\Storage;
+use MrDellimore\SheetStream\Concerns\FromView;
 use MrDellimore\SheetStream\Concerns\ShouldQueue;
 use MrDellimore\SheetStream\Concerns\UsesStagingTable;
 use MrDellimore\SheetStream\Concerns\WithMultipleSheets;
@@ -156,6 +157,37 @@ class SheetStreamManager
         ));
     }
 
+    /**
+     * Auto-select the phpspreadsheet driver when any sheet uses FromView.
+     */
+    private function resolveWriterDriver(object $export): string
+    {
+        $configured = (string) ($this->app['config']['sheet-stream.default_writer'] ?? 'openspout');
+
+        if ($this->requiresPhpSpreadsheet($export)) {
+            return 'phpspreadsheet';
+        }
+
+        return $configured;
+    }
+
+    private function requiresPhpSpreadsheet(object $export): bool
+    {
+        if ($export instanceof FromView) {
+            return true;
+        }
+
+        if ($export instanceof WithMultipleSheets) {
+            foreach ($export->sheets() as $sheet) {
+                if ($sheet instanceof FromView) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     private function extension(string $filename): string
     {
         return strtolower(pathinfo($filename, PATHINFO_EXTENSION) ?: 'xlsx');
@@ -163,7 +195,7 @@ class SheetStreamManager
 
     private function runExportToTemp(object $export, string $extension): string
     {
-        $driver = (string) ($this->app['config']['sheet-stream.default_writer'] ?? 'openspout');
+        $driver = $this->resolveWriterDriver($export);
         $nativeOptions = $export instanceof WithWriterOptions ? $export->writerOptions() : null;
         $writer = EngineFactory::writer($driver, $extension, $this->writerOptions(), $nativeOptions);
         $tmp = tempnam($this->tempPath(), 'sheet_stream_');

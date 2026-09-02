@@ -11,4 +11,9 @@ abstract class TestCase extends Orchestra
     {
         return [SheetStreamServiceProvider::class];
     }
+
+    protected function getEnvironmentSetUp($app): void
+    {
+        $app['view']->addNamespace('sheet-stream-tests', __DIR__.'/Fixtures/views');
+    }
 }

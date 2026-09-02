@@ -17,5 +17,12 @@ interface Writer
      */
     public function addRow(array $cells, ?object $rowStyle = null, array $columnStyles = []): void;
 
+    /**
+     * Load an HTML string into the current sheet using PhpSpreadsheet's Html reader.
+     *
+     * Only supported by the phpspreadsheet driver. OpenSpout will throw UnsupportedByEngine.
+     */
+    public function loadHtml(string $html): void;
+
     public function close(): void;
 }

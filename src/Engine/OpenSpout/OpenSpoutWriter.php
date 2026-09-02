@@ -122,6 +122,15 @@ final class OpenSpoutWriter implements Writer
         return $this->dateStyle ??= (new Style)->setFormat($this->dateFormat);
     }
 
+    public function loadHtml(string $html): void
+    {
+        throw new UnsupportedByEngine(
+            'FromView requires the phpspreadsheet engine driver. '
+            .'Install phpoffice/phpspreadsheet and set the driver to "phpspreadsheet", '
+            .'or let SheetStreamManager auto-select it.'
+        );
+    }
+
     public function close(): void
     {
         $this->writer->close();

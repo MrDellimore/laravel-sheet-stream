@@ -6,6 +6,7 @@ namespace MrDellimore\SheetStream\Engine\PhpSpreadsheet;
 
 use MrDellimore\SheetStream\Engine\Contracts\Writer;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Reader\Html;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Writer\Csv;
@@ -74,6 +75,26 @@ final class PhpSpreadsheetWriter implements Writer
         }
 
         $this->currentRow++;
+    }
+
+    public function loadHtml(string $html): void
+    {
+        $sheetIndex = $this->spreadsheet->getIndex($this->currentSheet);
+
+        $tmpFile = tempnam(sys_get_temp_dir(), 'sheet_stream_html_').'.html';
+        file_put_contents($tmpFile, $html);
+
+        try {
+            /** @var Html $reader */
+            $reader = IOFactory::createReader('Html');
+            $reader->setSheetIndex($sheetIndex);
+            $reader->loadIntoExisting($tmpFile, $this->spreadsheet);
+        } finally {
+            @unlink($tmpFile);
+        }
+
+        // The Html reader may have changed the active sheet; restore our reference.
+        $this->currentSheet = $this->spreadsheet->getSheet($sheetIndex);
     }
 
     public function close(): void
