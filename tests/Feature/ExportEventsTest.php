@@ -56,8 +56,7 @@ it('does not crash when export does not implement WithEvents', function () {
         (new ExportRunner)->run($export, $writer);
         $writer->close();
 
-        expect(file_exists($tmp))->toBeTrue();
-        expect(filesize($tmp))->toBeGreaterThan(0);
+        expect(file_exists($tmp))->toBeTrue()->and(filesize($tmp))->toBeGreaterThan(0);
     } finally {
         @unlink($tmp);
     }

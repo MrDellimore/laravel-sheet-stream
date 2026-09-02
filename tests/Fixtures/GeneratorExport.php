@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrDellimore\SheetStream\Tests\Fixtures;
 
 use Generator;
@@ -9,7 +11,7 @@ use MrDellimore\SheetStream\Concerns\WithHeadings;
 class GeneratorExport implements FromGenerator, WithHeadings
 {
     public function __construct(
-        private array $rows = [],
+        private readonly array $rows = [],
     ) {}
 
     public function generator(): Generator

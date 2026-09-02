@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrDellimore\SheetStream\Tests\Fixtures;
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -14,7 +16,7 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
  */
 class FormulaXlsxFixtureBuilder
 {
-    private string $path;
+    private readonly string $path;
 
     public function __construct()
     {

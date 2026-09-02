@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrDellimore\SheetStream\Tests\Fixtures;
 
 use Illuminate\Support\Collection;
@@ -16,7 +18,7 @@ class EventTrackingExport implements FromCollection, WithEvents, WithHeadings
     public array $firedEvents = [];
 
     public function __construct(
-        private array $rows = [],
+        private readonly array $rows = [],
     ) {}
 
     public function collection(): Collection

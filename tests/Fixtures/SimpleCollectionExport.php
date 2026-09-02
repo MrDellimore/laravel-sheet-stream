@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrDellimore\SheetStream\Tests\Fixtures;
 
 use Illuminate\Support\Collection;
@@ -9,7 +11,7 @@ use MrDellimore\SheetStream\Concerns\WithHeadings;
 class SimpleCollectionExport implements FromCollection, WithHeadings
 {
     public function __construct(
-        private array $rows = [],
+        private readonly array $rows = [],
     ) {}
 
     public function collection(): Collection

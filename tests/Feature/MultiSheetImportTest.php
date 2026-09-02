@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use MrDellimore\SheetStream\Engine\OpenSpout\OpenSpoutReader;
 use MrDellimore\SheetStream\Imports\ImportRunner;
 use MrDellimore\SheetStream\Tests\Fixtures\MultiSheetImport;

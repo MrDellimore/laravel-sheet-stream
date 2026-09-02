@@ -89,9 +89,9 @@ it('benchmarks the staging pipeline against a large xlsx file', function () {
 
     // WithMultipleSheets wrapper that routes every sheet (by numeric index 0–9)
     // to the same no-op import, ensuring all sheets in the file are processed.
-    $import = new class($sheetImport) implements ShouldQueue, UsesStagingTable, WithMultipleSheets
+    $import = new readonly class($sheetImport) implements ShouldQueue, UsesStagingTable, WithMultipleSheets
     {
-        public function __construct(private readonly object $sheet) {}
+        public function __construct(private object $sheet) {}
 
         public function sheets(): array
         {

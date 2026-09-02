@@ -10,7 +10,7 @@ use MrDellimore\SheetStream\Concerns\WithMapping;
 class MappedExport implements FromCollection, WithHeadings, WithMapping
 {
     public function __construct(
-        private array $rows = [],
+        private readonly array $rows = [],
     ) {}
 
     public function collection(): Collection

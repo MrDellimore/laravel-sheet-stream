@@ -7,7 +7,7 @@ use OpenSpout\Writer\CSV\Writer;
 
 class CsvFixtureBuilder
 {
-    private string $path;
+    private readonly string $path;
 
     public function __construct()
     {

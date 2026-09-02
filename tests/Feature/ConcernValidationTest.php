@@ -135,7 +135,7 @@ it('throws when export has multiple data source concerns', function () {
 it('validates multi-sheet sub-imports eagerly', function () {
     $badSubImport = new class implements WithHeadingRow {};
 
-    $import = new class($badSubImport) implements WithMultipleSheets
+    $import = new readonly class($badSubImport) implements WithMultipleSheets
     {
         public function __construct(private object $sub) {}
 

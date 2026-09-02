@@ -7,7 +7,7 @@ use OpenSpout\Writer\XLSX\Writer;
 
 class MultiSheetXlsxFixtureBuilder
 {
-    private string $path;
+    private readonly string $path;
 
     public function __construct()
     {

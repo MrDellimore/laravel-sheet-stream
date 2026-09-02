@@ -14,7 +14,7 @@ use OpenSpout\Common\Entity\Style\Style;
 class StyledExport implements FromCollection, WithColumnStyles, WithDefaultRowStyle, WithHeadings, WithHeadingStyle
 {
     public function __construct(
-        private array $rows = [],
+        private readonly array $rows = [],
     ) {}
 
     public function collection(): Collection

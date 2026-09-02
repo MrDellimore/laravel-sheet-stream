@@ -59,13 +59,7 @@ it('fires AfterChunk with correct chunk numbers for small batch size', function 
     $chunks = array_values($chunks);
 
     // 5 rows with batch size 2 → chunks: 0 (2 rows), 1 (2 rows), 2 (1 row)
-    expect($chunks)->toHaveCount(3);
-    expect($chunks[0]['event']->chunkNumber)->toBe(0);
-    expect($chunks[0]['event']->rowsInChunk)->toBe(2);
-    expect($chunks[1]['event']->chunkNumber)->toBe(1);
-    expect($chunks[1]['event']->rowsInChunk)->toBe(2);
-    expect($chunks[2]['event']->chunkNumber)->toBe(2);
-    expect($chunks[2]['event']->rowsInChunk)->toBe(1);
+    expect($chunks)->toHaveCount(3)->and($chunks[0]['event']->chunkNumber)->toBe(0)->and($chunks[0]['event']->rowsInChunk)->toBe(2)->and($chunks[1]['event']->chunkNumber)->toBe(1)->and($chunks[1]['event']->rowsInChunk)->toBe(2)->and($chunks[2]['event']->chunkNumber)->toBe(2)->and($chunks[2]['event']->rowsInChunk)->toBe(1);
 });
 
 it('does not crash when import does not implement WithEvents', function () {
@@ -98,12 +92,10 @@ it('passes correct import object in event properties', function () {
     $reader->close();
 
     $beforeImport = $import->firedEvents[0]['event'];
-    expect($beforeImport)->toBeInstanceOf(BeforeImport::class);
-    expect($beforeImport->import)->toBe($import);
+    expect($beforeImport)->toBeInstanceOf(BeforeImport::class)->and($beforeImport->import)->toBe($import);
 
     $beforeSheet = $import->firedEvents[1]['event'];
-    expect($beforeSheet)->toBeInstanceOf(BeforeSheet::class);
-    expect($beforeSheet->sheetIndex)->toBe(0);
+    expect($beforeSheet)->toBeInstanceOf(BeforeSheet::class)->and($beforeSheet->sheetIndex)->toBe(0);
 });
 
 it('works with RegistersEventListeners trait', function () {
@@ -122,6 +114,5 @@ it('works with RegistersEventListeners trait', function () {
     expect($import->firedEvents)->toBe([
         BeforeImport::class,
         AfterImport::class,
-    ]);
-    expect($import->result)->toHaveCount(1);
+    ])->and($import->result)->toHaveCount(1);
 });

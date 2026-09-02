@@ -11,7 +11,7 @@ use OpenSpout\Writer\XLSX\Writer;
  */
 class XlsxFixtureBuilder
 {
-    private string $path;
+    private readonly string $path;
 
     public function __construct()
     {

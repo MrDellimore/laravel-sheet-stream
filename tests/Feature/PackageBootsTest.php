@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use MrDellimore\SheetStream\SheetStreamManager;
 
 it('boots the service provider and resolves the facade', function () {

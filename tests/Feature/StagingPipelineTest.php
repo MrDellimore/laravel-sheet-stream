@@ -56,9 +56,7 @@ it('producer inserts all data rows into the staging table', function () {
     expect(DB::table('sheet_stream_staging')->count())->toBe(3);
 
     $rows = DB::table('sheet_stream_staging')->orderBy('row_number')->get();
-    expect(json_decode($rows[0]->row_data, true))->toMatchArray(['name' => 'Alice', 'email' => 'alice@example.com']);
-    expect(json_decode($rows[1]->row_data, true))->toMatchArray(['name' => 'Bob', 'email' => 'bob@example.com']);
-    expect(json_decode($rows[2]->row_data, true))->toMatchArray(['name' => 'Charlie', 'email' => 'charlie@example.com']);
+    expect(json_decode($rows[0]->row_data, true))->toMatchArray(['name' => 'Alice', 'email' => 'alice@example.com'])->and(json_decode($rows[1]->row_data, true))->toMatchArray(['name' => 'Bob', 'email' => 'bob@example.com'])->and(json_decode($rows[2]->row_data, true))->toMatchArray(['name' => 'Charlie', 'email' => 'charlie@example.com']);
 });
 
 it('producer assigns correct chunk numbers based on chunk size', function () {

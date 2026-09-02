@@ -11,7 +11,7 @@ use OpenSpout\Writer\CSV\Options;
 class NoBomCsvExport implements FromCollection, WithHeadings, WithWriterOptions
 {
     public function __construct(
-        private array $rows = [],
+        private readonly array $rows = [],
     ) {}
 
     public function collection(): Collection

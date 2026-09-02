@@ -95,7 +95,7 @@ it('file producer assigns correct chunk numbers by creating separate files', fun
     expect($files)->toHaveCount(3);
 
     // Verify file naming matches expected chunks
-    $basenames = array_map('basename', $files);
+    $basenames = array_map(basename(...), $files);
     sort($basenames);
     expect($basenames)->toBe(['s0_c0.ndjson', 's0_c1.ndjson', 's0_c2.ndjson']);
 });

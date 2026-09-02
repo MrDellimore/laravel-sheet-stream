@@ -9,7 +9,7 @@ use MrDellimore\SheetStream\Concerns\WithTitle;
 class ViewExport implements FromView, WithTitle
 {
     public function __construct(
-        private array $rows = [],
+        private readonly array $rows = [],
     ) {}
 
     public function view(): View
