@@ -13,6 +13,7 @@ use MrDellimore\SheetStream\Events\BeforeSheet;
 use MrDellimore\SheetStream\Events\BeforeWriting;
 use MrDellimore\SheetStream\Events\ImportFailed;
 
+/** @phpstan-ignore trait.unused */
 trait RegistersEventListeners
 {
     public function registerEvents(): array
