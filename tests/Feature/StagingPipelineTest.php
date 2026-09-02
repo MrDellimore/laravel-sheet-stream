@@ -16,6 +16,8 @@ use MrDellimore\SheetStream\Tests\Fixtures\XlsxFixtureBuilder;
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
+    config()->set('sheet-stream.staging.driver', 'database');
+
     Schema::create('sheet_stream_staging', function ($table) {
         $table->id();
         $table->char('import_id', 36);
