@@ -9,12 +9,12 @@ use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 use ZipArchive;
 
-final class CsvConverter
+final readonly class CsvConverter
 {
     public function __construct(
-        private readonly ?string $binary = null,
-        private readonly ?string $tempDir = null,
-        private readonly int $timeoutSeconds = 3600,
+        private ?string $binary = null,
+        private ?string $tempDir = null,
+        private int $timeoutSeconds = 3600,
     ) {}
 
     /**
