@@ -39,7 +39,7 @@ final class EventBus
 
     public function dispatch(object $event): void
     {
-        $class = get_class($event);
+        $class = $event::class;
 
         foreach ($this->listeners[$class] ?? [] as $listener) {
             $listener($event);
