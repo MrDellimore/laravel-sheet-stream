@@ -11,8 +11,10 @@ use MrDellimore\SheetStream\Concerns\ToArray;
 use MrDellimore\SheetStream\Concerns\ToCollection;
 use MrDellimore\SheetStream\Concerns\ToModel;
 use MrDellimore\SheetStream\Concerns\WithBatchInserts;
+use MrDellimore\SheetStream\Concerns\WithChunkOffset;
 use MrDellimore\SheetStream\Concerns\WithHeadingRow;
 use MrDellimore\SheetStream\Concerns\WithMultipleSheets;
+use MrDellimore\SheetStream\Concerns\WithRowNumber;
 use MrDellimore\SheetStream\Concerns\WithValidation;
 use MrDellimore\SheetStream\Engine\Contracts\Reader;
 use MrDellimore\SheetStream\Engine\Contracts\SheetReader;
@@ -73,8 +75,8 @@ class ImportRunner
         $skipsEmpty = $import instanceof SkipsEmptyRows;
         $hasValidation = $import instanceof WithValidation;
         $skipsOnFailure = $import instanceof SkipsOnFailure;
-        $remembersRowNumber = method_exists($import, 'setRowNumber');
-        $remembersChunkOffset = method_exists($import, 'setChunkOffset');
+        $remembersRowNumber = $import instanceof WithRowNumber;
+        $remembersChunkOffset = $import instanceof WithChunkOffset;
 
         $batchSize = $import instanceof WithBatchInserts
             ? $import->batchSize()

@@ -7,8 +7,9 @@ use MrDellimore\SheetStream\Concerns\RemembersRowNumber;
 use MrDellimore\SheetStream\Concerns\ToModel;
 use MrDellimore\SheetStream\Concerns\WithBatchInserts;
 use MrDellimore\SheetStream\Concerns\WithHeadingRow;
+use MrDellimore\SheetStream\Concerns\WithRowNumber;
 
-class RowNumberTrackingImport implements ToModel, WithBatchInserts, WithHeadingRow
+class RowNumberTrackingImport implements ToModel, WithBatchInserts, WithHeadingRow, WithRowNumber
 {
     use RemembersRowNumber;
 

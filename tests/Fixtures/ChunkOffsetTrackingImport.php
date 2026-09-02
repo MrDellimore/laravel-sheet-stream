@@ -6,9 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 use MrDellimore\SheetStream\Concerns\RemembersChunkOffset;
 use MrDellimore\SheetStream\Concerns\ToModel;
 use MrDellimore\SheetStream\Concerns\WithBatchInserts;
+use MrDellimore\SheetStream\Concerns\WithChunkOffset;
 use MrDellimore\SheetStream\Concerns\WithHeadingRow;
 
-class ChunkOffsetTrackingImport implements ToModel, WithBatchInserts, WithHeadingRow
+class ChunkOffsetTrackingImport implements ToModel, WithBatchInserts, WithChunkOffset, WithHeadingRow
 {
     use RemembersChunkOffset;
 
