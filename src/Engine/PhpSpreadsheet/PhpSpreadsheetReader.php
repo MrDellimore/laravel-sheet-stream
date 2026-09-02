@@ -18,7 +18,7 @@ final class PhpSpreadsheetReader implements Reader
 {
     private Spreadsheet $spreadsheet;
 
-    private bool $calculateFormulas;
+    private readonly bool $calculateFormulas;
 
     public function __construct(
         private array $options = [],

@@ -30,7 +30,10 @@
         "psr-4": { "MrDellimore\\SheetStream\\": "src/" }
     },
     "autoload-dev": {
-        "psr-4": { "MrDellimore\\SheetStream\\Tests\\": "tests/" }
+        "psr-4": {
+            "MrDellimore\\SheetStream\\Tests\\": "tests/",
+            "Utils\\Rector\\": "utils/rector/src/"
+        }
     },
     "extra": {
         "laravel": {
