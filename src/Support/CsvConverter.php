@@ -142,7 +142,7 @@ final class CsvConverter
     }
 
     /**
-     * @return array<int, string>  CSV paths indexed by sheet index
+     * @return array<int, string> CSV paths indexed by sheet index
      */
     private function runConversion(string $binary, string $spreadsheetPath, int $expectedSheets): array
     {

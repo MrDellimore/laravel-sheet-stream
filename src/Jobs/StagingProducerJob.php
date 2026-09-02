@@ -73,7 +73,7 @@ class StagingProducerJob implements ShouldQueue
             return false;
         }
 
-        return (CsvConverter::fromConfig())->isAvailable();
+        return CsvConverter::fromConfig()->isAvailable();
     }
 
     private function stageFromReader(StagingStore $store, string $importId, string $localPath): void

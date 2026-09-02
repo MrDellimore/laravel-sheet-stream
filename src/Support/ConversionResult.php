@@ -7,7 +7,7 @@ namespace MrDellimore\SheetStream\Support;
 final class ConversionResult
 {
     /**
-     * @param  array<int, string>  $csvPaths    CSV file paths indexed by sheet index
+     * @param  array<int, string>  $csvPaths  CSV file paths indexed by sheet index
      * @param  array<int, string>  $sheetNames  Sheet names indexed by sheet index
      */
     public function __construct(
