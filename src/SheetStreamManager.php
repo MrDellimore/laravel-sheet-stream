@@ -38,11 +38,12 @@ class SheetStreamManager
         $reader = EngineFactory::reader($driver, $this->readerOptions(), $nativeOptions);
         $reader->open($path);
 
+        $bus = EventBus::for($import);
+
         try {
             $runner = new ImportRunner((int) ($this->app['config']['sheet-stream.batch_size'] ?? 1000));
-            $runner->run($import, $reader);
+            $runner->run($import, $reader, $bus);
         } catch (\Throwable $e) {
-            $bus = EventBus::for($import);
             $bus?->dispatch(new ImportFailed($import, $e));
 
             throw $e;

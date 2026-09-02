@@ -18,20 +18,20 @@ final class EventBus
         }
 
         $bus = new self;
-
-        foreach ($subject->registerEvents() as $eventClass => $listener) {
-            $bus->listeners[$eventClass][] = $listener;
-        }
+        $bus->addListenersFrom($subject);
 
         return $bus;
     }
 
     public function merge(object $subject): void
     {
-        if (! $subject instanceof WithEvents) {
-            return;
+        if ($subject instanceof WithEvents) {
+            $this->addListenersFrom($subject);
         }
+    }
 
+    private function addListenersFrom(WithEvents $subject): void
+    {
         foreach ($subject->registerEvents() as $eventClass => $listener) {
             $this->listeners[$eventClass][] = $listener;
         }

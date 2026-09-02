@@ -38,7 +38,7 @@ class ImportRunner
         $this->processSheet($import, $sheetReader, $bus, $sheetIndex);
     }
 
-    public function run(object $import, Reader $reader): void
+    public function run(object $import, Reader $reader, ?EventBus $bus = null): void
     {
         $cachedSheets = $import instanceof WithMultipleSheets ? $import->sheets() : null;
         $subImports = $cachedSheets ?? [$import];
@@ -47,7 +47,7 @@ class ImportRunner
             $this->validateConcerns($subImport);
         }
 
-        $bus = EventBus::for($import);
+        $bus ??= EventBus::for($import);
         $bus?->dispatch(new BeforeImport($import));
 
         foreach ($reader->sheets() as $sheetIndex => $sheetReader) {

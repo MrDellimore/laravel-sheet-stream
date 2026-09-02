@@ -7,7 +7,7 @@ namespace MrDellimore\SheetStream\Events;
 class AfterChunk
 {
     public function __construct(
-        public readonly object $sheetImport,
+        public readonly object $sheet,
         public readonly int $sheetIndex,
         public readonly int $chunkNumber,
         public readonly int $rowsInChunk,

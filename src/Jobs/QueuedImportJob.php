@@ -44,6 +44,7 @@ class QueuedImportJob implements ShouldQueue
         }
 
         $localPath = $this->resolveLocalPath('sheet_stream_import_');
+        $bus = EventBus::for($this->import);
 
         try {
             $driver = config('sheet-stream.default_reader', 'openspout');
@@ -53,9 +54,8 @@ class QueuedImportJob implements ShouldQueue
 
             try {
                 $runner = new ImportRunner($this->batchSize);
-                $runner->run($this->import, $reader);
+                $runner->run($this->import, $reader, $bus);
             } catch (\Throwable $e) {
-                $bus = EventBus::for($this->import);
                 $bus?->dispatch(new ImportFailed($this->import, $e));
 
                 throw $e;

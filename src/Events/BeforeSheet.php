@@ -7,7 +7,7 @@ namespace MrDellimore\SheetStream\Events;
 class BeforeSheet
 {
     public function __construct(
-        public readonly object $sheetImport,
+        public readonly object $sheet,
         public readonly int $sheetIndex,
         public readonly ?string $sheetName = null,
     ) {}
