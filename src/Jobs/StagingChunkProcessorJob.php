@@ -65,6 +65,8 @@ class StagingChunkProcessorJob implements ShouldQueue
             : $rows->count();
         $rules = $hasValidation ? $this->sheetImport->rules() : [];
 
+        $remembersRowNumber = method_exists($this->sheetImport, 'setRowNumber');
+
         $buffer = [];
         $modelBuffer = [];
         $failures = [];
@@ -87,6 +89,10 @@ class StagingChunkProcessorJob implements ShouldQueue
 
                         throw new ValidationException($validator);
                     }
+                }
+
+                if ($remembersRowNumber) {
+                    $this->sheetImport->setRowNumber($staged->row_number);
                 }
 
                 if ($isToModel) {

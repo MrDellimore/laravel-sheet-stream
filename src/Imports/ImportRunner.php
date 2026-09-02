@@ -73,6 +73,7 @@ class ImportRunner
         $skipsEmpty = $import instanceof SkipsEmptyRows;
         $hasValidation = $import instanceof WithValidation;
         $skipsOnFailure = $import instanceof SkipsOnFailure;
+        $remembersRowNumber = method_exists($import, 'setRowNumber');
 
         $batchSize = $import instanceof WithBatchInserts
             ? $import->batchSize()
@@ -120,6 +121,10 @@ class ImportRunner
 
                     throw new ValidationException($validator);
                 }
+            }
+
+            if ($remembersRowNumber) {
+                $import->setRowNumber($rowNumber);
             }
 
             if ($isToModel) {
