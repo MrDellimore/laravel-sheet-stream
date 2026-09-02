@@ -6,9 +6,7 @@ use MrDellimore\SheetStream\Events\BeforeImport;
 use MrDellimore\SheetStream\Support\EventBus;
 
 it('returns null when subject does not implement WithEvents', function () {
-    $subject = new class
-    {
-    };
+    $subject = new class {};
 
     expect(EventBus::for($subject))->toBeNull();
 });
@@ -121,9 +119,7 @@ it('merge skips non-WithEvents subjects', function () {
         }
     };
 
-    $plain = new class
-    {
-    };
+    $plain = new class {};
 
     $bus = EventBus::for($parent);
     $bus->merge($plain);

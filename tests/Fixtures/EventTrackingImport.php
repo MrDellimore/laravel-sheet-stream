@@ -12,7 +12,7 @@ use MrDellimore\SheetStream\Events\BeforeImport;
 use MrDellimore\SheetStream\Events\BeforeSheet;
 use MrDellimore\SheetStream\Events\ImportFailed;
 
-class EventTrackingImport implements ToArray, WithHeadingRow, WithEvents
+class EventTrackingImport implements ToArray, WithEvents, WithHeadingRow
 {
     public array $result = [];
 

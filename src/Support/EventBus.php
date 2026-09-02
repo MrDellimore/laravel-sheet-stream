@@ -17,7 +17,7 @@ final class EventBus
             return null;
         }
 
-        $bus = new self();
+        $bus = new self;
 
         foreach ($subject->registerEvents() as $eventClass => $listener) {
             $bus->listeners[$eventClass][] = $listener;

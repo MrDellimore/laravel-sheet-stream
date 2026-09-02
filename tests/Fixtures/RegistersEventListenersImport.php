@@ -9,7 +9,7 @@ use MrDellimore\SheetStream\Concerns\WithHeadingRow;
 use MrDellimore\SheetStream\Events\AfterImport;
 use MrDellimore\SheetStream\Events\BeforeImport;
 
-class RegistersEventListenersImport implements ToArray, WithHeadingRow, WithEvents
+class RegistersEventListenersImport implements ToArray, WithEvents, WithHeadingRow
 {
     use RegistersEventListeners;
 

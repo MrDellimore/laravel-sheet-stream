@@ -11,7 +11,7 @@ use MrDellimore\SheetStream\Events\BeforeExport;
 use MrDellimore\SheetStream\Events\BeforeSheet;
 use MrDellimore\SheetStream\Events\BeforeWriting;
 
-class EventTrackingExport implements FromCollection, WithHeadings, WithEvents
+class EventTrackingExport implements FromCollection, WithEvents, WithHeadings
 {
     public array $firedEvents = [];
 
