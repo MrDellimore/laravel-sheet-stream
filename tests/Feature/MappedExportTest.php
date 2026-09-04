@@ -30,12 +30,12 @@ it('applies WithMapping transformation during export', function () {
 
         expect($import->result)->toHaveCount(2)
             ->and($import->result[0])->toMatchArray([
-                'full name' => 'ALICE',
-                'email address' => 'alice@example.com',
+                'full_name' => 'ALICE',
+                'email_address' => 'alice@example.com',
             ])
             ->and($import->result[1])->toMatchArray([
-                'full name' => 'BOB',
-                'email address' => 'bob@example.com',
+                'full_name' => 'BOB',
+                'email_address' => 'bob@example.com',
             ]);
     } finally {
         if (file_exists($tmp)) {

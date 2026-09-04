@@ -47,7 +47,7 @@ it('truncates extra columns when row is longer than headings', function () {
         ]);
 });
 
-it('normalizes heading keys to lowercase trimmed strings', function () {
+it('slugifies heading keys by default (Laravel Excel compatible)', function () {
     $fixture = (new XlsxFixtureBuilder)->write([
         ['  First Name ', ' EMAIL '],
         ['Alice', 'alice@example.com'],
@@ -58,6 +58,39 @@ it('normalizes heading keys to lowercase trimmed strings', function () {
     $reader->open($fixture->path());
 
     (new ImportRunner)->run($import, $reader);
+    $reader->close();
+
+    expect(array_keys($import->result[0]))->toBe(['first_name', 'email']);
+});
+
+it('slugifies verbose headers the way Laravel Excel does', function () {
+    $fixture = (new XlsxFixtureBuilder)->write([
+        ['HHC ID', 'PLAN TYPE (FI/PART C/FEP/MCD MCO/SEP/SF ERISA/OTHER)'],
+        ['HHC-1', 'PART C'],
+    ]);
+
+    $import = new SimpleArrayImport;
+    $reader = new OpenSpoutReader;
+    $reader->open($fixture->path());
+
+    (new ImportRunner)->run($import, $reader);
+    $reader->close();
+
+    expect(array_keys($import->result[0]))
+        ->toBe(['hhc_id', 'plan_type_fipart_cfepmcd_mcosepsf_erisaother']);
+});
+
+it('keeps lowercase + trim heading keys when the formatter is "none"', function () {
+    $fixture = (new XlsxFixtureBuilder)->write([
+        ['  First Name ', ' EMAIL '],
+        ['Alice', 'alice@example.com'],
+    ]);
+
+    $import = new SimpleArrayImport;
+    $reader = new OpenSpoutReader;
+    $reader->open($fixture->path());
+
+    (new ImportRunner(headingFormatter: 'none'))->run($import, $reader);
     $reader->close();
 
     expect(array_keys($import->result[0]))->toBe(['first name', 'email']);

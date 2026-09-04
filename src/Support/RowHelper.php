@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MrDellimore\SheetStream\Support;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 final class RowHelper
 {
@@ -27,10 +28,18 @@ final class RowHelper
         }
     }
 
-    /** @return array<int, string> */
-    public static function normalizeHeadings(array $rawRow): array
+    /**
+     * @param  array<int, mixed>  $rawRow
+     * @return array<int, string>
+     */
+    public static function normalizeHeadings(array $rawRow, string $strategy = 'slug'): array
     {
-        return array_map(fn ($h) => mb_strtolower(trim((string) $h)), $rawRow);
+        return array_map(
+            fn ($h) => $strategy === 'none'
+                ? mb_strtolower(trim((string) $h))
+                : Str::slug((string) $h, '_'),
+            $rawRow
+        );
     }
 
     public static function keyRow(array $rawRow, array $headings, int $headingCount): array

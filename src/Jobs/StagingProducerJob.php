@@ -43,6 +43,7 @@ class StagingProducerJob implements ShouldQueue
         public readonly array $readerOptions = [],
         public readonly int $chunkSize = 1000,
         public readonly int $insertBatchSize = 500,
+        public readonly string $headingFormatter = 'slug',
     ) {
         $this->applyJobConfig($import);
     }
@@ -194,7 +195,7 @@ class StagingProducerJob implements ShouldQueue
             $rawRow = array_values($rawRow);
 
             if ($headings === null && $hasHeadingRow) {
-                $headings = RowHelper::normalizeHeadings($rawRow);
+                $headings = RowHelper::normalizeHeadings($rawRow, $this->headingFormatter);
                 $headingCount = count($headings);
 
                 continue;

@@ -31,6 +31,7 @@ class QueuedImportJob implements ShouldQueue
         public ?string $disk = null,
         public array $readerOptions = [],
         public int $batchSize = 1000,
+        public string $headingFormatter = 'slug',
     ) {
         $this->applyJobConfig($import);
     }
@@ -53,7 +54,7 @@ class QueuedImportJob implements ShouldQueue
             $reader->open($localPath);
 
             try {
-                $runner = new ImportRunner($this->batchSize);
+                $runner = new ImportRunner($this->batchSize, $this->headingFormatter);
                 $runner->run($this->import, $reader, $bus);
             } catch (\Throwable $e) {
                 $bus?->dispatch(new ImportFailed($this->import, $e));
@@ -92,6 +93,7 @@ class QueuedImportJob implements ShouldQueue
                             disk: $this->disk,
                             readerOptions: $this->readerOptions,
                             batchSize: $this->batchSize,
+                            headingFormatter: $this->headingFormatter,
                         );
                     }
                 }

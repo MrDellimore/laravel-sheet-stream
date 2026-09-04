@@ -33,6 +33,7 @@ class QueuedSheetImportJob implements ShouldQueue
         public readonly ?string $disk = null,
         public readonly array $readerOptions = [],
         public readonly int $batchSize = 1000,
+        public readonly string $headingFormatter = 'slug',
     ) {
         $this->applyJobConfig($sheetImport, $parentImport);
     }
@@ -53,7 +54,7 @@ class QueuedSheetImportJob implements ShouldQueue
             $reader->open($localPath);
 
             try {
-                $runner = new ImportRunner($this->batchSize);
+                $runner = new ImportRunner($this->batchSize, $this->headingFormatter);
 
                 foreach ($reader->sheets() as $index => $sheetReader) {
                     if ($index === $this->sheetIndex) {

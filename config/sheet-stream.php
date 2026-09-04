@@ -6,6 +6,11 @@ return [
     'batch_size' => 1000,              // rows per DB insert batch (ToModel imports)
     'chunk_size' => 1000,              // rows per queued chunk job
     'temp_path' => null,               // null = sys_get_temp_dir()
+
+    // How WithHeadingRow keys each data row.
+    //   'slug' — Laravel Excel compatible (Str::slug with '_'): "Plan Type" => plan_type
+    //   'none' — lowercase + trim only:                          "Plan Type" => "plan type"
+    'heading_formatter' => 'slug',
     'dates' => [
         'coerce' => true,              // sane date coercion by default
         'timezone' => null,

@@ -33,6 +33,7 @@ class ImportRunner
 {
     public function __construct(
         private readonly int $defaultBatchSize = 1000,
+        private readonly string $headingFormatter = 'slug',
     ) {}
 
     public function runSheet(object $import, SheetReader $sheetReader, ?EventBus $bus = null, int $sheetIndex = 0): void
@@ -101,7 +102,7 @@ class ImportRunner
             $rawRow = array_values($rawRow);
 
             if ($headings === null && $hasHeadingRow) {
-                $headings = RowHelper::normalizeHeadings($rawRow);
+                $headings = RowHelper::normalizeHeadings($rawRow, $this->headingFormatter);
                 $headingCount = count($headings);
 
                 continue;

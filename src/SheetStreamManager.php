@@ -43,7 +43,10 @@ class SheetStreamManager
         $bus = EventBus::for($import);
 
         try {
-            $runner = new ImportRunner((int) ($this->app['config']['sheet-stream.batch_size'] ?? 1000));
+            $runner = new ImportRunner(
+                (int) ($this->app['config']['sheet-stream.batch_size'] ?? 1000),
+                $this->headingFormatter(),
+            );
             $runner->run($import, $reader, $bus);
         } catch (\Throwable $e) {
             $bus?->dispatch(new ImportFailed($import, $e));
@@ -132,6 +135,7 @@ class SheetStreamManager
                 readerOptions: $this->readerOptions($import),
                 chunkSize: (int) ($this->app['config']['sheet-stream.chunk_size'] ?? 1000),
                 insertBatchSize: (int) ($this->app['config']['sheet-stream.staging.insert_batch_size'] ?? 500),
+                headingFormatter: $this->headingFormatter(),
             ));
         }
 
@@ -141,6 +145,7 @@ class SheetStreamManager
             disk: $disk,
             readerOptions: $this->readerOptions($import),
             batchSize: (int) ($this->app['config']['sheet-stream.batch_size'] ?? 1000),
+            headingFormatter: $this->headingFormatter(),
         ));
     }
 
@@ -244,6 +249,11 @@ class SheetStreamManager
                 'The CSV/TSV format does not support multiple sheets. Use .xlsx or .ods instead.'
             );
         }
+    }
+
+    private function headingFormatter(): string
+    {
+        return (string) ($this->app['config']['sheet-stream.heading_formatter'] ?? 'slug');
     }
 
     private function tempPath(): string
