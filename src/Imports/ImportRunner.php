@@ -15,6 +15,7 @@ use MrDellimore\SheetStream\Concerns\WithBatchInserts;
 use MrDellimore\SheetStream\Concerns\WithChunkOffset;
 use MrDellimore\SheetStream\Concerns\WithHeadingRow;
 use MrDellimore\SheetStream\Concerns\WithMultipleSheets;
+use MrDellimore\SheetStream\Concerns\WithRequiredHeadings;
 use MrDellimore\SheetStream\Concerns\WithRowNumber;
 use MrDellimore\SheetStream\Concerns\WithValidation;
 use MrDellimore\SheetStream\Engine\Contracts\Reader;
@@ -25,6 +26,7 @@ use MrDellimore\SheetStream\Events\AfterSheet;
 use MrDellimore\SheetStream\Events\BeforeImport;
 use MrDellimore\SheetStream\Events\BeforeSheet;
 use MrDellimore\SheetStream\Exceptions\InvalidConcernCombination;
+use MrDellimore\SheetStream\Exceptions\MissingHeadingsException;
 use MrDellimore\SheetStream\Support\EventBus;
 use MrDellimore\SheetStream\Support\RowHelper;
 use MrDellimore\SheetStream\Support\SheetResolver;
@@ -104,6 +106,14 @@ class ImportRunner
             if ($headings === null && $hasHeadingRow) {
                 $headings = RowHelper::normalizeHeadings($rawRow, $this->headingFormatter);
                 $headingCount = count($headings);
+
+                if ($import instanceof WithRequiredHeadings) {
+                    $missing = array_values(array_diff($import->requiredHeadings(), $headings));
+
+                    if ($missing !== []) {
+                        throw new MissingHeadingsException($missing);
+                    }
+                }
 
                 continue;
             }
@@ -226,6 +236,12 @@ class ImportRunner
         if ($import instanceof SkipsOnFailure && ! $import instanceof WithValidation) {
             throw new InvalidConcernCombination(
                 'SkipsOnFailure requires WithValidation to also be implemented.'
+            );
+        }
+
+        if ($import instanceof WithRequiredHeadings && ! $import instanceof WithHeadingRow) {
+            throw new InvalidConcernCombination(
+                'WithRequiredHeadings requires WithHeadingRow to also be implemented.'
             );
         }
     }
