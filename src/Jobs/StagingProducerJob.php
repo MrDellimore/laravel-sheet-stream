@@ -12,6 +12,7 @@ use MrDellimore\SheetStream\Concerns\SkipsEmptyRows;
 use MrDellimore\SheetStream\Concerns\WithCsvPreConversion;
 use MrDellimore\SheetStream\Concerns\WithHeadingRow;
 use MrDellimore\SheetStream\Concerns\WithReaderOptions;
+use MrDellimore\SheetStream\Concerns\WithRequiredHeadings;
 use MrDellimore\SheetStream\Engine\Contracts\SheetReader;
 use MrDellimore\SheetStream\Engine\EngineFactory;
 use MrDellimore\SheetStream\Events\AfterImport;
@@ -19,6 +20,7 @@ use MrDellimore\SheetStream\Events\AfterSheet;
 use MrDellimore\SheetStream\Events\BeforeImport;
 use MrDellimore\SheetStream\Events\BeforeSheet;
 use MrDellimore\SheetStream\Events\ImportFailed;
+use MrDellimore\SheetStream\Exceptions\MissingHeadingsException;
 use MrDellimore\SheetStream\Staging\StagingStore;
 use MrDellimore\SheetStream\Support\ConfiguresFromConcern;
 use MrDellimore\SheetStream\Support\ConversionResult;
@@ -197,6 +199,14 @@ class StagingProducerJob implements ShouldQueue
             if ($headings === null && $hasHeadingRow) {
                 $headings = RowHelper::normalizeHeadings($rawRow, $this->headingFormatter);
                 $headingCount = count($headings);
+
+                if ($subImport instanceof WithRequiredHeadings) {
+                    $missing = array_diff($subImport->requiredHeadings(), $headings);
+
+                    if ($missing !== []) {
+                        throw new MissingHeadingsException(array_values($missing), $sheetName);
+                    }
+                }
 
                 continue;
             }

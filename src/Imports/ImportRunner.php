@@ -108,10 +108,10 @@ class ImportRunner
                 $headingCount = count($headings);
 
                 if ($import instanceof WithRequiredHeadings) {
-                    $missing = array_values(array_diff($import->requiredHeadings(), $headings));
+                    $missing = array_diff($import->requiredHeadings(), $headings);
 
                     if ($missing !== []) {
-                        throw new MissingHeadingsException($missing);
+                        throw new MissingHeadingsException(array_values($missing), $sheetReader->name());
                     }
                 }
 
