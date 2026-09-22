@@ -9,6 +9,7 @@ use MrDellimore\SheetStream\Concerns\FromView;
 use MrDellimore\SheetStream\Concerns\ShouldQueue;
 use MrDellimore\SheetStream\Concerns\UsesStagingTable;
 use MrDellimore\SheetStream\Concerns\WithCalculatedFormulas;
+use MrDellimore\SheetStream\Concerns\WithFormatData;
 use MrDellimore\SheetStream\Concerns\WithMultipleSheets;
 use MrDellimore\SheetStream\Concerns\WithReaderOptions;
 use MrDellimore\SheetStream\Concerns\WithWriterOptions;
@@ -20,6 +21,7 @@ use MrDellimore\SheetStream\Imports\ImportRunner;
 use MrDellimore\SheetStream\Jobs\QueuedExportJob;
 use MrDellimore\SheetStream\Jobs\QueuedImportJob;
 use MrDellimore\SheetStream\Jobs\StagingProducerJob;
+use MrDellimore\SheetStream\Support\CellNormalizer;
 use MrDellimore\SheetStream\Support\EventBus;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -225,10 +227,11 @@ class SheetStreamManager
     {
         return [
             'dates' => [
-                'coerce' => (bool) ($this->app['config']['sheet-stream.dates.coerce'] ?? true),
+                'import_as' => (string) ($this->app['config']['sheet-stream.dates.import_as'] ?? CellNormalizer::DATES_AS_SERIAL),
                 'timezone' => $this->app['config']['sheet-stream.dates.timezone'] ?? null,
             ],
             'calculateFormulas' => $import instanceof WithCalculatedFormulas,
+            'formatData' => $import instanceof WithFormatData,
         ];
     }
 

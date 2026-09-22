@@ -200,6 +200,8 @@ class ClaimantsExport implements FromQuery, WithHeadings, WithMapping
 | `SkipsOnFailure` | Skip invalid rows; receive **all** failures (with row numbers) at once after processing |
 | `SkipsEmptyRows` | Skip rows where every cell is null or empty string |
 | `WithMultipleSheets` | Route each sheet to a different import object |
+| `WithFormatData` | Receive cells as display strings rendered through their number format (dates as `"09/16/2026"`, not serials) |
+| `WithCalculatedFormulas` | Receive the computed value of formula cells instead of the formula string |
 | `WithReaderOptions` | Pass native OpenSpout reader options (CSV delimiter, encoding, etc.) |
 | `ShouldQueue` | Dispatch the import to a queue worker |
 | `UsesStagingTable` | Two-phase staging pipeline for very large queued imports ([details](#staging-pipeline)) |
@@ -238,6 +240,7 @@ class ClaimantsExport implements FromQuery, WithHeadings, WithMapping
 | Queued imports/exports | Yes (`ShouldQueue`) | Yes (`ShouldQueue`) | Yes |
 | Row/column styling | Yes (XLSX/ODS) | No | Yes |
 | CSV delimiter/encoding options | Yes (`WithReaderOptions` / `WithWriterOptions`) | No | Yes |
+| Date cells on import | Excel serial (default) · `DateTimeImmutable` via `dates.import_as` · string via `WithFormatData` | Same | Excel serial · string via `WithFormatData` |
 
 > **Two engines, one API.** Switch between `openspout` (streaming) and `phpspreadsheet` (full-featured) via config — your import/export classes stay the same. Install the PhpSpreadsheet driver with: `composer require phpoffice/phpspreadsheet`
 
@@ -254,7 +257,7 @@ return [
     'chunk_size'     => 1000,   // rows per queued chunk job
     'temp_path'      => null,   // null = sys_get_temp_dir()
     'dates' => [
-        'coerce'          => true,
+        'import_as'       => 'serial',                 // 'serial' (Laravel Excel compatible) or 'datetime' (DateTimeImmutable)
         'timezone'        => null,
         'format'          => 'yyyy-mm-dd',             // Excel number format for date-only exports
         'datetime_format' => 'yyyy-mm-dd hh:mm:ss',   // Excel number format for date+time exports

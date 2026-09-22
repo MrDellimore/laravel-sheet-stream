@@ -11,8 +11,13 @@ return [
     //   'slug' — Laravel Excel compatible (Str::slug with '_'): "Plan Type" => plan_type
     //   'none' — lowercase + trim only:                          "Plan Type" => "plan type"
     'heading_formatter' => 'slug',
+    // How date-styled cells reach your import class.
+    //   'serial'   — Excel serial number (int/float), Laravel Excel compatible. Convert with
+    //                PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject() or your own
+    //                helper. Implement WithFormatData to receive the display string instead.
+    //   'datetime' — DateTimeImmutable objects (converted to dates.timezone when set).
     'dates' => [
-        'coerce' => true,              // sane date coercion by default
+        'import_as' => 'serial',
         'timezone' => null,
         'format' => 'yyyy-mm-dd',              // Excel number format for date-only exports
         'datetime_format' => 'yyyy-mm-dd hh:mm:ss', // Excel number format for date+time exports

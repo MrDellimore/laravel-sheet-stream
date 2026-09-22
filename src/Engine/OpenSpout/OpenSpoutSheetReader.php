@@ -6,6 +6,7 @@ use DateTimeImmutable;
 use DateTimeInterface;
 use DateTimeZone;
 use MrDellimore\SheetStream\Engine\Contracts\SheetReader;
+use MrDellimore\SheetStream\Support\CellNormalizer;
 use OpenSpout\Common\Entity\Cell\FormulaCell;
 use OpenSpout\Common\Entity\Row;
 use OpenSpout\Reader\SheetInterface;
@@ -16,6 +17,8 @@ final readonly class OpenSpoutSheetReader implements SheetReader
 
     private bool $calculateFormulas;
 
+    private string $dateMode;
+
     public function __construct(
         private SheetInterface $sheet,
         array $options = [],
@@ -23,6 +26,9 @@ final readonly class OpenSpoutSheetReader implements SheetReader
         $tz = $options['dates']['timezone'] ?? null;
         $this->timezone = $tz !== null ? new DateTimeZone($tz) : null;
         $this->calculateFormulas = (bool) ($options['calculateFormulas'] ?? false);
+        $this->dateMode = CellNormalizer::assertValidDateMode(
+            (string) ($options['dates']['import_as'] ?? CellNormalizer::DATES_AS_SERIAL)
+        );
     }
 
     public function name(): string
@@ -62,7 +68,7 @@ final readonly class OpenSpoutSheetReader implements SheetReader
                 $cells = $this->applyTimezone($cells);
             }
 
-            yield $cells;
+            yield CellNormalizer::normalize($cells, $this->dateMode);
 
             try {
                 $iterator->next();

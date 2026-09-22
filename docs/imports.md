@@ -218,6 +218,48 @@ class ClaimantsImport implements ToModel, WithHeadingRow, WithValidation, SkipsO
 
 ---
 
+## Dates and formatted values
+
+Date-styled cells arrive as **Excel serial numbers** by default (`46281` for `2026-09-16`, `46281.5` for noon that day), exactly as Laravel Excel returns them without `WithFormatData`. Import code that already handles serials keeps working unchanged:
+
+```php
+use PhpOffice\PhpSpreadsheet\Shared\Date;
+
+$dateOfBirth = Date::excelToDateTimeObject($row['date_of_birth']);
+```
+
+Set `dates.import_as` to `'datetime'` in `config/sheet-stream.php` to receive `DateTimeImmutable` objects instead. See [Configuration](configuration.md#datesimport_as).
+
+### WithFormatData
+
+Receive cell values as the strings a spreadsheet application would display, rendered through each cell's number format — Laravel Excel's `WithFormatData` behaviour.
+
+```php
+use MrDellimore\SheetStream\Concerns\ToArray;
+use MrDellimore\SheetStream\Concerns\WithFormatData;
+use MrDellimore\SheetStream\Concerns\WithHeadingRow;
+
+class DisplayValuesImport implements ToArray, WithFormatData, WithHeadingRow
+{
+    public function array(array $rows): void
+    {
+        // $rows[0]['date_of_birth'] === '09/16/2026'
+    }
+}
+```
+
+| Engine | Effect |
+|---|---|
+| OpenSpout (XLSX/ODS) | Date/time-styled cells become strings; plain numbers stay numeric. Combines with `WithReaderOptions`. |
+| PhpSpreadsheet | Every numeric cell is rendered through its number format (currency, percent, dates…), as Laravel Excel does. Styles must be loaded, which costs extra memory. |
+| CSV | No effect — CSV cells are already strings. |
+
+### WithCalculatedFormulas
+
+Receive the cached computed value of formula cells instead of the formula string. On the OpenSpout engine this is the value saved by Excel/Google Sheets; on the PhpSpreadsheet engine formulas are recalculated live.
+
+---
+
 ## Reader options
 
 ### WithReaderOptions

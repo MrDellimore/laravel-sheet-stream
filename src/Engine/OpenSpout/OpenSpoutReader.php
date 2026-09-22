@@ -49,15 +49,11 @@ final class OpenSpoutReader implements Reader
     private function createReaderForExtension(string $extension): ReaderInterface
     {
         return match ($extension) {
-            'xlsx' => new XlsxReader(
-                $this->nativeOptions instanceof XlsxOptions ? $this->nativeOptions : null,
-            ),
+            'xlsx' => new XlsxReader($this->xlsxOptions()),
             'csv', 'tsv' => new CsvReader(
                 $this->nativeOptions instanceof CsvOptions ? $this->nativeOptions : null,
             ),
-            'ods' => new OdsReader(
-                $this->nativeOptions instanceof OdsOptions ? $this->nativeOptions : null,
-            ),
+            'ods' => new OdsReader($this->odsOptions()),
             'xls' => throw new UnsupportedByEngine(
                 'The .xls (legacy binary) format is not supported by the OpenSpout engine. '
                 .'Use .xlsx, .csv, or .ods instead.'
@@ -66,5 +62,43 @@ final class OpenSpoutReader implements Reader
                 "Unsupported file extension: .{$extension}"
             ),
         };
+    }
+
+    /**
+     * WithFormatData asks OpenSpout to render date-styled cells as strings
+     * (SHOULD_FORMAT_DATES). The flag is layered onto any native options the
+     * import supplied so WithReaderOptions and WithFormatData compose.
+     */
+    private function xlsxOptions(): ?XlsxOptions
+    {
+        $options = $this->nativeOptions instanceof XlsxOptions ? $this->nativeOptions : null;
+
+        if (! $this->formatData()) {
+            return $options;
+        }
+
+        $options ??= new XlsxOptions;
+        $options->SHOULD_FORMAT_DATES = true;
+
+        return $options;
+    }
+
+    private function odsOptions(): ?OdsOptions
+    {
+        $options = $this->nativeOptions instanceof OdsOptions ? $this->nativeOptions : null;
+
+        if (! $this->formatData()) {
+            return $options;
+        }
+
+        $options ??= new OdsOptions;
+        $options->SHOULD_FORMAT_DATES = true;
+
+        return $options;
+    }
+
+    private function formatData(): bool
+    {
+        return (bool) ($this->options['formatData'] ?? false);
     }
 }

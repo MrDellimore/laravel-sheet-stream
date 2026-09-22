@@ -4,6 +4,7 @@ namespace MrDellimore\SheetStream\Engine\PhpSpreadsheet;
 
 use MrDellimore\SheetStream\Engine\Contracts\Reader;
 use MrDellimore\SheetStream\Engine\Contracts\SheetReader;
+use MrDellimore\SheetStream\Support\CellNormalizer;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
@@ -20,17 +21,25 @@ final class PhpSpreadsheetReader implements Reader
 
     private readonly bool $calculateFormulas;
 
+    private readonly bool $needsStyles;
+
     public function __construct(
-        private array $options = [],
+        private readonly array $options = [],
     ) {
         $this->calculateFormulas = (bool) ($options['calculateFormulas'] ?? false);
+
+        // Rendering a cell through its number format, or recognising a
+        // date-styled cell, needs the workbook's style table, which
+        // "data only" mode discards.
+        $this->needsStyles = (bool) ($options['formatData'] ?? false)
+            || ($options['dates']['import_as'] ?? CellNormalizer::DATES_AS_SERIAL) === CellNormalizer::DATES_AS_DATETIME;
     }
 
     public function open(string $path): void
     {
         $reader = IOFactory::createReaderForFile($path);
 
-        if (! $this->calculateFormulas) {
+        if (! $this->calculateFormulas && ! $this->needsStyles) {
             $reader->setReadDataOnly(true);
         }
 
@@ -40,10 +49,8 @@ final class PhpSpreadsheetReader implements Reader
     /** @return iterable<int, SheetReader> */
     public function sheets(): iterable
     {
-        $tz = $this->options['dates']['timezone'] ?? null;
-
         foreach ($this->spreadsheet->getAllSheets() as $worksheet) {
-            yield new PhpSpreadsheetSheetReader($worksheet, $tz, $this->calculateFormulas);
+            yield new PhpSpreadsheetSheetReader($worksheet, $this->options);
         }
     }
 

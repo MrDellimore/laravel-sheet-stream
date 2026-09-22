@@ -27,6 +27,8 @@ Sheet Stream uses the **same concern names** as Laravel Excel. Migrating an impo
 | `Maatwebsite\Excel\Concerns\SkipsOnFailure` | `MrDellimore\SheetStream\Concerns\SkipsOnFailure` | Signature differs (see below) |
 | `Maatwebsite\Excel\Concerns\WithMultipleSheets` | `MrDellimore\SheetStream\Concerns\WithMultipleSheets` | Namespace only |
 | `Maatwebsite\Excel\Concerns\WithChunkReading` | *(not needed)* | Remove — streaming is built-in |
+| `Maatwebsite\Excel\Concerns\WithFormatData` | `MrDellimore\SheetStream\Concerns\WithFormatData` | Namespace only (see dates note below) |
+| `Maatwebsite\Excel\Concerns\WithCalculatedFormulas` | `MrDellimore\SheetStream\Concerns\WithCalculatedFormulas` | Namespace only |
 | `Maatwebsite\Excel\Concerns\WithCustomCsvSettings` | `MrDellimore\SheetStream\Concerns\WithReaderOptions` | Different API (see below) |
 | `Illuminate\Contracts\Queue\ShouldQueue` | `MrDellimore\SheetStream\Concerns\ShouldQueue` | Namespace only |
 
@@ -46,6 +48,10 @@ Sheet Stream uses the **same concern names** as Laravel Excel. Migrating an impo
 | `Illuminate\Contracts\Queue\ShouldQueue` | `MrDellimore\SheetStream\Concerns\ShouldQueue` | Namespace only |
 
 ## What changes beyond the namespace
+
+### Dates — nothing, by default
+
+Laravel Excel hands your import the raw **Excel serial number** for a date-styled cell (`46281` for `2026-09-16`) unless the import uses `WithFormatData`, in which case it receives the display string. Sheet Stream does the same out of the box, so helpers built around `Date::excelToDateTimeObject()` or `Carbon::createFromFormat()` keep working. If you would rather receive `DateTimeImmutable` objects, set `dates.import_as` to `'datetime'` — but note that is an intentional departure from Laravel Excel and your helpers must accept objects.
 
 ### SkipsOnFailure signature
 

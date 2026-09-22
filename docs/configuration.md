@@ -16,7 +16,7 @@ return [
     'chunk_size'     => 1000,
     'temp_path'      => null,
     'dates' => [
-        'coerce'          => true,
+        'import_as'       => 'serial',
         'timezone'        => null,
         'format'          => 'yyyy-mm-dd',
         'datetime_format' => 'yyyy-mm-dd hh:mm:ss',
@@ -102,17 +102,26 @@ Directory for temporary files created during exports. Set this when the default 
 'temp_path' => storage_path('app/temp'),
 ```
 
-### `dates.coerce`
+### `dates.import_as`
 
-**Default:** `true`
+**Default:** `'serial'`
 
-When enabled, the engine applies sane date coercion defaults. This addresses common issues where Excel stores dates as serial numbers or formatted strings.
+How a date-styled cell reaches your import class.
+
+| Value | Cell `2026-09-16` arrives as | Notes |
+|---|---|---|
+| `'serial'` | `46281` (int, or float when the cell has a time part) | Laravel Excel compatible. Convert with `PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject()` or your own helper. |
+| `'datetime'` | `DateTimeImmutable` | Converted to `dates.timezone` when set. |
+
+Serials are always emitted in the 1900 date system, so `excelToDateTimeObject()` needs no calendar switch even for workbooks saved with the 1904 system.
+
+To receive the string a spreadsheet application would display instead (e.g. `"09/16/2026"`), implement the [`WithFormatData`](imports.md#withformatdata) concern on the import; it overrides this setting for that import.
 
 ### `dates.timezone`
 
 **Default:** `null`
 
-When set to a timezone string (e.g. `'America/New_York'`), date values read from spreadsheets are converted to this timezone. When `null`, no timezone conversion is applied.
+When set to a timezone string (e.g. `'America/New_York'`), date values read from spreadsheets are converted to this timezone before being returned (in `datetime` mode) or converted to a serial (in `serial` mode, the serial reflects the local wall-clock time). When `null`, no timezone conversion is applied.
 
 ---
 

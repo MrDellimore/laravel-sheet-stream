@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** date-styled cells now reach imports as **Excel serial numbers** (int, or float with a time part) instead of `DateTimeImmutable`, matching Laravel Excel. Import helpers written against Laravel Excel (`Date::excelToDateTimeObject()`, `Carbon::createFromFormat()`, `trim()` on every cell…) work without modification. Set `dates.import_as` to `'datetime'` to keep the previous behaviour.
+- **Breaking:** the unused `dates.coerce` config key is replaced by `dates.import_as` (`'serial'` | `'datetime'`).
+- `dates.timezone` is applied before serial conversion, so the serial reflects the local wall-clock time.
+- `PhpSpreadsheetSheetReader` now takes the reader options array (same shape as `OpenSpoutSheetReader`) instead of positional timezone / formula arguments.
+
+### Added
+- `WithFormatData` concern — receive cells as display strings rendered through their number format (Laravel Excel parity). Enables `SHOULD_FORMAT_DATES` on the OpenSpout engine, layered onto any `WithReaderOptions`; uses `NumberFormat::toFormattedString()` on the PhpSpreadsheet engine.
+- `Support\CellNormalizer` — converts `DateTimeInterface` / `DateInterval` cells to 1900-system Excel serials, including the 1900 leap-year quirk for dates before March 1900.
+- `dates.import_as` is validated; an unknown value throws `InvalidArgumentException`.
+
 ---
 
 ## [0.1.0] — 2026-09-01

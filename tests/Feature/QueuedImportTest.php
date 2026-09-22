@@ -69,7 +69,7 @@ it('executes the import correctly when QueuedImportJob is handled', function () 
         import: $import,
         filePath: $fixture->path(),
         readerOptions: [
-            'dates' => ['coerce' => true, 'timezone' => null],
+            'dates' => ['import_as' => 'serial', 'timezone' => null],
         ],
     );
 
