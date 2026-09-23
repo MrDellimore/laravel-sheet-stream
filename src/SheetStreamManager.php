@@ -23,6 +23,7 @@ use MrDellimore\SheetStream\Jobs\QueuedImportJob;
 use MrDellimore\SheetStream\Jobs\StagingProducerJob;
 use MrDellimore\SheetStream\Support\CellNormalizer;
 use MrDellimore\SheetStream\Support\EventBus;
+use MrDellimore\SheetStream\Support\TempFileResolver;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SheetStreamManager
@@ -40,7 +41,18 @@ class SheetStreamManager
         $driver = (string) ($this->app['config']['sheet-stream.default_reader'] ?? 'openspout');
         $nativeOptions = $import instanceof WithReaderOptions ? $import->readerOptions() : null;
         $reader = EngineFactory::reader($driver, $this->readerOptions($import), $nativeOptions);
-        $reader->open($path);
+
+        // A file on a filesystem disk (e.g. s3) is streamed to a local temp file first;
+        // the engines can only open real local paths.
+        $localPath = TempFileResolver::localPath($path, $disk, 'sheet_stream_import_');
+
+        try {
+            $reader->open($localPath);
+        } catch (\Throwable $e) {
+            TempFileResolver::cleanup($localPath, $disk);
+
+            throw $e;
+        }
 
         $bus = EventBus::for($import);
 
@@ -56,6 +68,7 @@ class SheetStreamManager
             throw $e;
         } finally {
             $reader->close();
+            TempFileResolver::cleanup($localPath, $disk);
         }
 
         return null;

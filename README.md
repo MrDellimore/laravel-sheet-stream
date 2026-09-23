@@ -63,6 +63,9 @@ php artisan migrate
 use MrDellimore\SheetStream\Facades\SheetStream;
 
 SheetStream::import(new ClaimantsImport, storage_path('imports/claimants.xlsx'));
+
+// From a filesystem disk (streamed to a local temp file for the duration of the import):
+SheetStream::import(new ClaimantsImport, 'imports/claimants.xlsx', disk: 's3');
 ```
 
 ### Export (streamed download)
