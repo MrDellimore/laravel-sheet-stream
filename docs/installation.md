@@ -4,9 +4,9 @@
 
 | Dependency | Version |
 |---|---|
-| PHP | `^8.2` |
+| PHP | `^8.4` |
 | Laravel | `^11.0 \| ^12.0 \| ^13.0` |
-| OpenSpout | `^4.30` (installed automatically) |
+| OpenSpout | `^5.12` (installed automatically) |
 | ext-zip | Required for `.xlsx` support |
 | ext-xmlreader | Required for `.xlsx` support |
 

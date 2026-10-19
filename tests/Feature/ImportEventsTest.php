@@ -52,7 +52,7 @@ it('fires AfterChunk with correct chunk numbers for small batch size', function 
     $reader = new OpenSpoutReader;
     $reader->open($fixture->path());
 
-    (new ImportRunner(defaultBatchSize: 2))->run($import, $reader);
+    new ImportRunner(defaultBatchSize: 2)->run($import, $reader);
     $reader->close();
 
     $chunks = array_filter($import->firedEvents, fn ($e) => $e['class'] === AfterChunk::class);

@@ -67,7 +67,8 @@ final class OpenSpoutReader implements Reader
     /**
      * WithFormatData asks OpenSpout to render date-styled cells as strings
      * (SHOULD_FORMAT_DATES). The flag is layered onto any native options the
-     * import supplied so WithReaderOptions and WithFormatData compose.
+     * import supplied so WithReaderOptions and WithFormatData compose. OpenSpout's
+     * Options are readonly, so the supplied instance is copied rather than mutated.
      */
     private function xlsxOptions(): ?XlsxOptions
     {
@@ -77,10 +78,10 @@ final class OpenSpoutReader implements Reader
             return $options;
         }
 
-        $options ??= new XlsxOptions;
-        $options->SHOULD_FORMAT_DATES = true;
-
-        return $options;
+        return new XlsxOptions(...[
+            ...($options instanceof XlsxOptions ? get_object_vars($options) : []),
+            'SHOULD_FORMAT_DATES' => true,
+        ]);
     }
 
     private function odsOptions(): ?OdsOptions
@@ -91,10 +92,10 @@ final class OpenSpoutReader implements Reader
             return $options;
         }
 
-        $options ??= new OdsOptions;
-        $options->SHOULD_FORMAT_DATES = true;
-
-        return $options;
+        return new OdsOptions(...[
+            ...($options instanceof OdsOptions ? get_object_vars($options) : []),
+            'SHOULD_FORMAT_DATES' => true,
+        ]);
     }
 
     private function formatData(): bool

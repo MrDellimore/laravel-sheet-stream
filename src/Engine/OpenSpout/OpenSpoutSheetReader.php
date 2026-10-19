@@ -10,6 +10,7 @@ use MrDellimore\SheetStream\Support\CellNormalizer;
 use OpenSpout\Common\Entity\Cell\FormulaCell;
 use OpenSpout\Common\Entity\Row;
 use OpenSpout\Reader\SheetInterface;
+use OpenSpout\Reader\XLSX\Sheet as XlsxSheet;
 
 final readonly class OpenSpoutSheetReader implements SheetReader
 {
@@ -18,6 +19,8 @@ final readonly class OpenSpoutSheetReader implements SheetReader
     private bool $calculateFormulas;
 
     private string $dateMode;
+
+    private bool $trimDimensionPadding;
 
     public function __construct(
         private SheetInterface $sheet,
@@ -29,6 +32,7 @@ final readonly class OpenSpoutSheetReader implements SheetReader
         $this->dateMode = CellNormalizer::assertValidDateMode(
             (string) ($options['dates']['import_as'] ?? CellNormalizer::DATES_AS_SERIAL)
         );
+        $this->trimDimensionPadding = $sheet instanceof XlsxSheet;
     }
 
     public function name(): string
@@ -62,6 +66,10 @@ final readonly class OpenSpoutSheetReader implements SheetReader
                 }
 
                 continue;
+            }
+
+            if ($this->trimDimensionPadding) {
+                $cells = $this->trimTrailingPadding($cells);
             }
 
             if ($this->timezone instanceof DateTimeZone) {
@@ -157,7 +165,7 @@ final readonly class OpenSpoutSheetReader implements SheetReader
 
         $cells = [];
 
-        foreach ($row->getCells() as $cell) {
+        foreach ($row->cells as $cell) {
             try {
                 $cells[] = $cell instanceof FormulaCell
                     ? $cell->getComputedValue()
@@ -165,6 +173,24 @@ final readonly class OpenSpoutSheetReader implements SheetReader
             } catch (\Throwable) {
                 $cells[] = null;
             }
+        }
+
+        return $cells;
+    }
+
+    /**
+     * OpenSpout 5 pads every XLSX row out to the sheet's <dimension> width with
+     * empty strings (v4 used each row's own "spans"). Strip that padding so a
+     * short row stays short — RowHelper pads it with null against the headings —
+     * and a heading row narrower than the data doesn't gain blank headings.
+     *
+     * @param  array<int, scalar|null|DateTimeInterface>  $cells
+     * @return array<int, scalar|null|DateTimeInterface>
+     */
+    private function trimTrailingPadding(array $cells): array
+    {
+        while ($cells !== [] && end($cells) === '') {
+            array_pop($cells);
         }
 
         return $cells;

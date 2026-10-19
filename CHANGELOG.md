@@ -9,7 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Upgrading to OpenSpout 5
+
+Sheet Stream now requires **OpenSpout `^5.12`** and **PHP `^8.4`**. OpenSpout 4 is no longer supported: the two APIs can't be served from one code path, so there is no compatibility layer.
+
+Your code is affected if it implements a concern that returns an OpenSpout object — `WithHeadingStyle`, `WithDefaultRowStyle`, `WithColumnStyles`, `WithReaderOptions` or `WithWriterOptions`. In OpenSpout 5, `Style` and every `Options` class are `readonly`: setters and property assignment are gone. Pass values as named constructor arguments instead, or derive a copy with the `with*()` methods.
+
+```php
+// Before (OpenSpout 4)
+$style = new Style;
+$style->setFontBold();
+$style->setFormat('#,##0.00');
+
+$options = new \OpenSpout\Reader\CSV\Options;
+$options->FIELD_DELIMITER = ';';
+
+// After (OpenSpout 5)
+$style = new Style(fontBold: true, format: '#,##0.00');
+// or: (new Style)->withFontBold(true)->withFormat('#,##0.00')
+
+$options = new \OpenSpout\Reader\CSV\Options(FIELD_DELIMITER: ';');
+```
+
+Code that uses OpenSpout directly is also affected: for example, `Row::getCells()` is now the `$row->cells` property and `Style::getFormat()` is `$style->format`. See OpenSpout's [UPGRADE.md](https://github.com/openspout/openspout/blob/5.x/UPGRADE.md).
+
+OpenSpout 5 also renames the writer option `DEFAULT_ROW_STYLE` to `FALLBACK_STYLE` and stops merging it into cells that have their own style: a cell now gets one style or the other. Sheet Stream already gave each cell exactly one style (its `WithColumnStyles` entry, otherwise `WithDefaultRowStyle`), so exports built through these concerns are unchanged. If you set `DEFAULT_ROW_STYLE` through `WithWriterOptions` and relied on it being merged into styled cells, switch to `FALLBACK_STYLE` and put the shared properties into each style.
+
 ### Changed
+- **Breaking:** requires `openspout/openspout` `^5.12` (was `^4.30`) and PHP `^8.4` (was `^8.3`). See *Upgrading to OpenSpout 5* above.
+- XLSX rows are read at their own width, as before. OpenSpout 5's reader pads every row out to the sheet's full width with empty strings. Sheet Stream strips that trailing padding, so short rows still get `null` for missing heading columns, and a heading row narrower than the data doesn't gain blank `''` headings.
+- `WithFormatData` no longer modifies the `Options` instance returned by `WithReaderOptions`. It builds a copy with `SHOULD_FORMAT_DATES` enabled.
 - **Breaking:** date-styled cells now reach imports as **Excel serial numbers** (int, or float with a time part) instead of `DateTimeImmutable`, matching Laravel Excel. Import helpers written against Laravel Excel (`Date::excelToDateTimeObject()`, `Carbon::createFromFormat()`, `trim()` on every cell…) work without modification. Set `dates.import_as` to `'datetime'` to keep the previous behaviour.
 - **Breaking:** the unused `dates.coerce` config key is replaced by `dates.import_as` (`'serial'` | `'datetime'`).
 - `dates.timezone` is applied before serial conversion, so the serial reflects the local wall-clock time.

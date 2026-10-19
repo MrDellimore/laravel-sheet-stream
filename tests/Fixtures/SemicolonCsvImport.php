@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrDellimore\SheetStream\Tests\Fixtures;
 
 use MrDellimore\SheetStream\Concerns\ToArray;
@@ -18,9 +20,6 @@ class SemicolonCsvImport implements ToArray, WithHeadingRow, WithReaderOptions
 
     public function readerOptions(): object
     {
-        $options = new Options;
-        $options->FIELD_DELIMITER = ';';
-
-        return $options;
+        return new Options(FIELD_DELIMITER: ';');
     }
 }

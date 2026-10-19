@@ -107,12 +107,12 @@ it('benchmarks the staging pipeline against a large xlsx file', function () {
 
     $chunkSize = 1000;
 
-    (new StagingProducerJob(
+    new StagingProducerJob(
         import: $import,
         filePath: $benchFile,
         chunkSize: $chunkSize,
         insertBatchSize: 500,
-    ))->handle();
+    )->handle();
 
     $producerTime = microtime(true) - $producerStart;
     $producerPeakMb = memory_get_peak_usage(true) / 1024 / 1024;

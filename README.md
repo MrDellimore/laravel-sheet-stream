@@ -27,9 +27,9 @@ streaming rows one at a time — memory stays flat regardless of file size.
 
 | | |
 |---|---|
-| PHP | `^8.3` |
+| PHP | `^8.4` |
 | Laravel | `^11.0 \| ^12.0 \| ^13.0` |
-| OpenSpout | `^4.30` |
+| OpenSpout | `^5.12` |
 | Extensions | `ext-zip`, `ext-xmlreader` |
 
 ---
