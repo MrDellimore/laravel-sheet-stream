@@ -12,8 +12,10 @@ use MrDellimore\SheetStream\Concerns\FromView;
 use MrDellimore\SheetStream\Concerns\WithMultipleSheets;
 use MrDellimore\SheetStream\Concerns\WithWriterOptions;
 use MrDellimore\SheetStream\Engine\EngineFactory;
+use MrDellimore\SheetStream\Events\AfterWriting;
 use MrDellimore\SheetStream\Exports\ExportRunner;
 use MrDellimore\SheetStream\Support\ConfiguresFromConcern;
+use MrDellimore\SheetStream\Support\EventBus;
 
 class QueuedExportJob implements ShouldQueue
 {
@@ -66,6 +68,8 @@ class QueuedExportJob implements ShouldQueue
             $runner = new ExportRunner($this->chunkSize);
             $runner->run($this->export, $writer);
             $writer->close();
+
+            EventBus::for($this->export)?->dispatch(new AfterWriting($this->export, $tmp));
 
             $targetDisk = $this->disk ?? config('filesystems.default', 'local');
             $handle = fopen($tmp, 'rb');
