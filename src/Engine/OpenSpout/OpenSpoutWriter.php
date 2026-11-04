@@ -3,12 +3,15 @@
 namespace MrDellimore\SheetStream\Engine\OpenSpout;
 
 use DateTimeInterface;
+use MrDellimore\SheetStream\Engine\Contracts\ExposesNativeSheet;
 use MrDellimore\SheetStream\Engine\Contracts\Writer;
+use MrDellimore\SheetStream\Engine\Contracts\WritesNativeRows;
 use MrDellimore\SheetStream\Exceptions\UnsupportedByEngine;
 use OpenSpout\Common\Entity\Cell;
 use OpenSpout\Common\Entity\Row;
 use OpenSpout\Common\Entity\Style\Style;
 use OpenSpout\Writer\AbstractWriterMultiSheets;
+use OpenSpout\Writer\Common\Entity\Sheet;
 use OpenSpout\Writer\CSV\Options as CsvOptions;
 use OpenSpout\Writer\CSV\Writer as CsvWriter;
 use OpenSpout\Writer\ODS\Options as OdsOptions;
@@ -17,7 +20,7 @@ use OpenSpout\Writer\WriterInterface;
 use OpenSpout\Writer\XLSX\Options as XlsxOptions;
 use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
 
-final class OpenSpoutWriter implements Writer
+final class OpenSpoutWriter implements ExposesNativeSheet, Writer, WritesNativeRows
 {
     private readonly WriterInterface $writer;
 
@@ -80,12 +83,16 @@ final class OpenSpoutWriter implements Writer
         // Single-pass: build typed Cell objects, applying date format styles as needed.
         // This avoids a separate containsDates() scan followed by a second buildRowWithDates() pass.
         $hasDates = false;
+        $hasCellObjects = false;
         $cellObjects = [];
 
         foreach (array_values($cells) as $index => $value) {
             $colStyle = $columnStyles[$index] ?? $style;
 
-            if ($value instanceof DateTimeInterface) {
+            if ($value instanceof Cell) {
+                $hasCellObjects = true;
+                $cellObjects[] = $value;
+            } elseif ($value instanceof DateTimeInterface) {
                 $hasDates = true;
                 $cellObjects[] = new Cell\DateTimeCell($value, $this->resolveDateStyle($value, $colStyle));
             } elseif ($colStyle instanceof Style) {
@@ -95,7 +102,7 @@ final class OpenSpoutWriter implements Writer
             }
         }
 
-        if ($hasDates || $columnStyles !== [] || $style instanceof Style) {
+        if ($hasDates || $hasCellObjects || $columnStyles !== [] || $style instanceof Style) {
             $this->writer->addRow(new Row($cellObjects));
         } else {
             $this->writer->addRow(Row::fromValues($cells));
@@ -120,6 +127,33 @@ final class OpenSpoutWriter implements Writer
         }
 
         return $this->dateStyle ??= (new Style)->withFormat($this->dateFormat);
+    }
+
+    public function acceptsNativeRow(mixed $row): bool
+    {
+        return $row instanceof Row;
+    }
+
+    public function addNativeRow(object $row): void
+    {
+        if (! $row instanceof Row) {
+            throw new UnsupportedByEngine('The OpenSpout engine can only write OpenSpout Row objects as native rows, got '.$row::class.'.');
+        }
+
+        $this->writer->addRow($row);
+    }
+
+    /**
+     * The OpenSpout sheet being written. CSV has no sheets, so it is
+     * unsupported there.
+     */
+    public function currentNativeSheet(): Sheet
+    {
+        if (! $this->writer instanceof AbstractWriterMultiSheets) {
+            throw new UnsupportedByEngine('The CSV format has no sheet to configure.');
+        }
+
+        return $this->writer->getCurrentSheet();
     }
 
     public function loadHtml(string $html): void

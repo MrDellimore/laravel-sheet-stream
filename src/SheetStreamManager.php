@@ -14,6 +14,7 @@ use MrDellimore\SheetStream\Concerns\WithMultipleSheets;
 use MrDellimore\SheetStream\Concerns\WithReaderOptions;
 use MrDellimore\SheetStream\Concerns\WithWriterOptions;
 use MrDellimore\SheetStream\Engine\EngineFactory;
+use MrDellimore\SheetStream\Events\AfterWriting;
 use MrDellimore\SheetStream\Events\ImportFailed;
 use MrDellimore\SheetStream\Exceptions\UnsupportedByEngine;
 use MrDellimore\SheetStream\Exports\ExportRunner;
@@ -228,6 +229,14 @@ class SheetStreamManager
             $writer->close();
         } catch (\Throwable $e) {
             $writer->close();
+            @unlink($tmp);
+
+            throw $e;
+        }
+
+        try {
+            EventBus::for($export)?->dispatch(new AfterWriting($export, $tmp));
+        } catch (\Throwable $e) {
             @unlink($tmp);
 
             throw $e;

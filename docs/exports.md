@@ -236,6 +236,78 @@ You can combine all three styling concerns on the same export class. Each data c
 
 ---
 
+## Engine-native rows, cells and sheets
+
+These concerns hand you OpenSpout's own objects for layouts the plain concerns can't express: per-cell styles, row heights, frozen panes, per-sheet column widths, or patching the finished file. They are OpenSpout-specific (the phpspreadsheet driver writes a `Cell`'s plain value and has no native rows).
+
+### Per-cell styles: return OpenSpout cells
+
+Any value in a row may be an `OpenSpout\Common\Entity\Cell`. It is written as it is, with its own style, and ignores `WithDefaultRowStyle` / `WithColumnStyles`. Building a `StringCell` yourself also keeps text that starts with `=` as text instead of a formula.
+
+```php
+use OpenSpout\Common\Entity\Cell;
+use OpenSpout\Common\Entity\Cell\StringCell;
+use OpenSpout\Common\Entity\Style\Style;
+
+public function map(mixed $row): array
+{
+    $changed = new Style()->setBackgroundColor('FFFF00');
+
+    return [
+        new StringCell($row->name, null),
+        Cell::fromValue($row->amount, $row->wasChanged('amount') ? $changed : null),
+    ];
+}
+```
+
+### Row heights: return an OpenSpout row
+
+`map()` (or a `FromGenerator` / `FromCollection` source) may return an `OpenSpout\Common\Entity\Row` instead of an array. It is written as it is, including its height.
+
+```php
+use OpenSpout\Common\Entity\Row;
+
+public function generator(): Generator
+{
+    yield Row::fromValues(['Quarterly report'])->setHeight(40);
+}
+```
+
+### WithSheetSetup
+
+Configure the native sheet before any row (heading included) is written: frozen panes, gridlines, column widths. You receive an `OpenSpout\Writer\Common\Entity\Sheet` on the openspout driver and a PhpSpreadsheet `Worksheet` on the phpspreadsheet driver.
+
+```php
+use MrDellimore\SheetStream\Concerns\WithSheetSetup;
+use OpenSpout\Writer\XLSX\Entity\SheetView;
+
+class UsersSheet implements FromQuery, WithHeadings, WithSheetSetup
+{
+    public function setUpSheet(object $sheet): void
+    {
+        $sheet->setSheetView(new SheetView()->setFreezeRow(2));
+        $sheet->setColumnWidth(32, 1);
+    }
+}
+```
+
+### AfterWriting
+
+Fired, through `WithEvents` on the top-level export, after the writer closes the file and before it is stored, downloaded or uploaded by a queued export. `$event->path` is the finished local file, so you can post-process it (for example, add parts of the .xlsx package OpenSpout can't write). If the listener throws, the temporary file is removed and nothing is stored.
+
+```php
+use MrDellimore\SheetStream\Events\AfterWriting;
+
+public function registerEvents(): array
+{
+    return [
+        AfterWriting::class => fn (AfterWriting $event) => $this->patcher->apply($event->path),
+    ];
+}
+```
+
+---
+
 ## Writer options
 
 ### WithWriterOptions

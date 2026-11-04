@@ -45,6 +45,11 @@ OpenSpout 5 also renames the writer option `DEFAULT_ROW_STYLE` to `FALLBACK_STYL
 - `PhpSpreadsheetSheetReader` now takes the reader options array (same shape as `OpenSpoutSheetReader`) instead of positional timezone / formula arguments.
 
 ### Added
+- Export rows may contain OpenSpout `Cell` objects, written as they are with their own style (per-cell styling; text starting with `=` stays text). The phpspreadsheet driver writes the cell's plain value.
+- Export rows may be OpenSpout `Row` objects (from `map()` or a `FromGenerator` / `FromCollection` source), written as they are, row height included.
+- `WithSheetSetup` concern: configure the engine's native sheet (frozen panes, gridlines, column widths) before any row is written. Backed by the new `Engine\Contracts\ExposesNativeSheet`, implemented by both writers.
+- `AfterWriting` export event with the finished file's local path, fired after the writer closes and before the file is stored, downloaded or uploaded by `QueuedExportJob`; the temporary file is removed if a listener throws.
+- `Engine\Contracts\WritesNativeRows`, implemented by the OpenSpout writer.
 - `WithFormatData` concern — receive cells as display strings rendered through their number format (Laravel Excel parity). Enables `SHOULD_FORMAT_DATES` on the OpenSpout engine, layered onto any `WithReaderOptions`; uses `NumberFormat::toFormattedString()` on the PhpSpreadsheet engine.
 - `Support\CellNormalizer` — converts `DateTimeInterface` / `DateInterval` cells to 1900-system Excel serials, including the 1900 leap-year quirk for dates before March 1900.
 - `dates.import_as` is validated; an unknown value throws `InvalidArgumentException`.
