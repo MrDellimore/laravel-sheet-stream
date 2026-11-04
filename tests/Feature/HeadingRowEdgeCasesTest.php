@@ -90,7 +90,7 @@ it('keeps lowercase + trim heading keys when the formatter is "none"', function 
     $reader = new OpenSpoutReader;
     $reader->open($fixture->path());
 
-    (new ImportRunner(headingFormatter: 'none'))->run($import, $reader);
+    new ImportRunner(headingFormatter: 'none')->run($import, $reader);
     $reader->close();
 
     expect(array_keys($import->result[0]))->toBe(['first name', 'email']);
