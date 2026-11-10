@@ -32,8 +32,8 @@ it('writes OpenSpout cells returned from map() as they are, keeping each cell\'s
         public function map(mixed $row): array
         {
             return [
-                new StringCell($row['name'], null),
-                StringCell::fromValue('flagged', new Style()->setBackgroundColor('FFFF00')),
+                new StringCell($row['name']),
+                StringCell::fromValue('flagged', new Style()->withBackgroundColor('FFFF00')),
             ];
         }
     };
@@ -54,7 +54,7 @@ it('writes OpenSpout rows yielded by a generator as they are, keeping the row he
     {
         public function generator(): Generator
         {
-            yield Row::fromValues(['Title'])->setHeight(42.5);
+            yield Row::fromValues(['Title'])->withHeight(42.5);
             yield ['plain', 'array'];
         }
     };
@@ -88,7 +88,7 @@ it('lets each sheet set up its native OpenSpout sheet before any row is written'
         {
             assert($sheet instanceof Sheet);
 
-            $sheet->setSheetView(new SheetView()->setFreezeRow($this->freezeRow)->setShowGridLines(false));
+            $sheet->setSheetView(new SheetView()->withFreezeRow($this->freezeRow)->withShowGridLines(false));
             $sheet->setColumnWidth($this->width, 1);
         }
     };

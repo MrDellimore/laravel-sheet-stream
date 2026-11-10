@@ -251,10 +251,10 @@ use OpenSpout\Common\Entity\Style\Style;
 
 public function map(mixed $row): array
 {
-    $changed = new Style()->setBackgroundColor('FFFF00');
+    $changed = new Style()->withBackgroundColor('FFFF00');
 
     return [
-        new StringCell($row->name, null),
+        new StringCell($row->name),
         Cell::fromValue($row->amount, $row->wasChanged('amount') ? $changed : null),
     ];
 }
@@ -262,14 +262,14 @@ public function map(mixed $row): array
 
 ### Row heights: return an OpenSpout row
 
-`map()` (or a `FromGenerator` / `FromCollection` source) may return an `OpenSpout\Common\Entity\Row` instead of an array. It is written as it is, including its height.
+A `FromGenerator` / `FromCollection` / `FromQuery` source may yield an `OpenSpout\Common\Entity\Row` instead of an array. It is written as it is, including its height. (`WithMapping::map()` is typed `array`, so a mapped export returns cells, not a row.)
 
 ```php
 use OpenSpout\Common\Entity\Row;
 
 public function generator(): Generator
 {
-    yield Row::fromValues(['Quarterly report'])->setHeight(40);
+    yield Row::fromValues(['Quarterly report'])->withHeight(40);
 }
 ```
 
@@ -285,7 +285,7 @@ class UsersSheet implements FromQuery, WithHeadings, WithSheetSetup
 {
     public function setUpSheet(object $sheet): void
     {
-        $sheet->setSheetView(new SheetView()->setFreezeRow(2));
+        $sheet->setSheetView(new SheetView()->withFreezeRow(2));
         $sheet->setColumnWidth(32, 1);
     }
 }
