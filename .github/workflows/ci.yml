@@ -16,6 +16,7 @@ jobs:
       matrix:
         include:
           # Laravel 11 is EOL and emits PHP 8.5 deprecations, so it stays on 8.4.
+          # Its advisory situation is handled by the ignore step below.
           - php: "8.4"
             laravel: "11"
             testbench: "^9.0"
@@ -50,6 +51,22 @@ jobs:
             "illuminate/support:^${{ matrix.laravel }}.0" \
             "illuminate/database:^${{ matrix.laravel }}.0" \
             --no-interaction --no-update
+
+      # Laravel 11's security window has closed, so the five advisories below
+      # will never be fixed in 11.x and Composer refuses to install any 11.x
+      # release. They are ignored for the Laravel 11 job ONLY -- the 12 and 13
+      # jobs keep advisory blocking fully on, which matters because the
+      # critical one (CVE-2026-114509) also covers Laravel 13 below 13.29.0.
+      #
+      # Advisories that WERE fixed inside 11.x are deliberately absent, so
+      # Composer still refuses the 11.x releases carrying them and resolves to
+      # the newest patched 11.x (>= 11.44.1 clears CVE-2025-27515 and
+      # CVE-2024-52301). Review this list whenever a new advisory lands.
+      - name: Ignore Laravel 11's unfixable advisories (Laravel 11 job only)
+        if: matrix.laravel == '11'
+        run: >
+          composer config --json policy.advisories.ignore-id
+          '["PKSA-b41t-wbzk-9q51","PKSA-d5tc-s1qs-h781","PKSA-m5cs-t1y6-qpcs","PKSA-3r5d-mb8f-1qw9","PKSA-mdq4-51ck-6kdq"]'
 
       - name: Install dependencies
         run: composer update --no-interaction --no-progress --prefer-stable

@@ -12,13 +12,17 @@ use MrDellimore\SheetStream\Concerns\WithHeadings;
 use MrDellimore\SheetStream\Concerns\WithHeadingStyle;
 use MrDellimore\SheetStream\Concerns\WithMapping;
 use MrDellimore\SheetStream\Concerns\WithMultipleSheets;
+use MrDellimore\SheetStream\Concerns\WithSheetSetup;
 use MrDellimore\SheetStream\Concerns\WithTitle;
+use MrDellimore\SheetStream\Engine\Contracts\ExposesNativeSheet;
 use MrDellimore\SheetStream\Engine\Contracts\Writer;
+use MrDellimore\SheetStream\Engine\Contracts\WritesNativeRows;
 use MrDellimore\SheetStream\Events\AfterSheet;
 use MrDellimore\SheetStream\Events\BeforeExport;
 use MrDellimore\SheetStream\Events\BeforeSheet;
 use MrDellimore\SheetStream\Events\BeforeWriting;
 use MrDellimore\SheetStream\Exceptions\InvalidConcernCombination;
+use MrDellimore\SheetStream\Exceptions\UnsupportedByEngine;
 use MrDellimore\SheetStream\Support\EventBus;
 
 class ExportRunner
@@ -52,6 +56,16 @@ class ExportRunner
     private function openSheet(object $export, Writer $writer): void
     {
         $writer->addSheet($export instanceof WithTitle ? $export->title() : null);
+
+        if (! $export instanceof WithSheetSetup) {
+            return;
+        }
+
+        if (! $writer instanceof ExposesNativeSheet) {
+            throw new UnsupportedByEngine('WithSheetSetup is not supported by the '.$writer::class.' engine.');
+        }
+
+        $export->setUpSheet($writer->currentNativeSheet());
     }
 
     private function writeSheet(object $export, Writer $writer): void
@@ -72,11 +86,15 @@ class ExportRunner
         $columnStyles = $export instanceof WithColumnStyles ? $export->columnStyles() : [];
 
         foreach ($this->getRows($export) as $row) {
-            $writer->addRow(
-                $mapsRows ? $export->map($row) : (array) $row,
-                $defaultRowStyle,
-                $columnStyles,
-            );
+            $values = $mapsRows ? $export->map($row) : $row;
+
+            if (! is_array($values) && $writer instanceof WritesNativeRows && $writer->acceptsNativeRow($values)) {
+                $writer->addNativeRow($values);
+
+                continue;
+            }
+
+            $writer->addRow((array) $values, $defaultRowStyle, $columnStyles);
         }
     }
 

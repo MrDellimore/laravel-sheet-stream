@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace MrDellimore\SheetStream\Engine\PhpSpreadsheet;
 
+use MrDellimore\SheetStream\Engine\Contracts\ExposesNativeSheet;
 use MrDellimore\SheetStream\Engine\Contracts\Writer;
+use OpenSpout\Common\Entity\Cell;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Reader\Html;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -17,7 +19,7 @@ use PhpOffice\PhpSpreadsheet\Writer\Csv;
  * Buffers the entire workbook in memory, then writes on close().
  * Use when you need .xls output or PhpSpreadsheet-specific features.
  */
-final class PhpSpreadsheetWriter implements Writer
+final class PhpSpreadsheetWriter implements ExposesNativeSheet, Writer
 {
     private readonly Spreadsheet $spreadsheet;
 
@@ -70,11 +72,16 @@ final class PhpSpreadsheetWriter implements Writer
         $col = 1;
 
         foreach ($cells as $value) {
-            $this->currentSheet->setCellValue([$col, $this->currentRow], $value);
+            $this->currentSheet->setCellValue([$col, $this->currentRow], $value instanceof Cell ? $value->getValue() : $value);
             $col++;
         }
 
         $this->currentRow++;
+    }
+
+    public function currentNativeSheet(): Worksheet
+    {
+        return $this->currentSheet;
     }
 
     public function loadHtml(string $html): void
