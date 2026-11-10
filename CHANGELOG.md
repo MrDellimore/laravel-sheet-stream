@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.1.0] — 2026-11-10
+
+> **Note:** this is a minor release, but it contains breaking changes — it
+> requires PHP `^8.4` (was `^8.3`) and OpenSpout `^5.12` (was `^4.30`). A `^1.0`
+> constraint will pick it up automatically. Pin to `1.0.*` if you are not ready
+> to move, and read *Upgrading to OpenSpout 5* below before updating.
+
 ### Upgrading to OpenSpout 5
 
 Sheet Stream now requires **OpenSpout `^5.12`** and **PHP `^8.4`**. OpenSpout 4 is no longer supported: the two APIs can't be served from one code path, so there is no compatibility layer.
@@ -39,10 +48,6 @@ OpenSpout 5 also renames the writer option `DEFAULT_ROW_STYLE` to `FALLBACK_STYL
 - **Breaking:** requires `openspout/openspout` `^5.12` (was `^4.30`) and PHP `^8.4` (was `^8.3`). See *Upgrading to OpenSpout 5* above.
 - XLSX rows are read at their own width, as before. OpenSpout 5's reader pads every row out to the sheet's full width with empty strings. Sheet Stream strips that trailing padding, so short rows still get `null` for missing heading columns, and a heading row narrower than the data doesn't gain blank `''` headings.
 - `WithFormatData` no longer modifies the `Options` instance returned by `WithReaderOptions`. It builds a copy with `SHOULD_FORMAT_DATES` enabled.
-- **Breaking:** date-styled cells now reach imports as **Excel serial numbers** (int, or float with a time part) instead of `DateTimeImmutable`, matching Laravel Excel. Import helpers written against Laravel Excel (`Date::excelToDateTimeObject()`, `Carbon::createFromFormat()`, `trim()` on every cell…) work without modification. Set `dates.import_as` to `'datetime'` to keep the previous behaviour.
-- **Breaking:** the unused `dates.coerce` config key is replaced by `dates.import_as` (`'serial'` | `'datetime'`).
-- `dates.timezone` is applied before serial conversion, so the serial reflects the local wall-clock time.
-- `PhpSpreadsheetSheetReader` now takes the reader options array (same shape as `OpenSpoutSheetReader`) instead of positional timezone / formula arguments.
 
 ### Added
 - Export rows may contain OpenSpout `Cell` objects, written as they are with their own style (per-cell styling; text starting with `=` stays text). The phpspreadsheet driver writes the cell's plain value.
@@ -50,6 +55,18 @@ OpenSpout 5 also renames the writer option `DEFAULT_ROW_STYLE` to `FALLBACK_STYL
 - `WithSheetSetup` concern: configure the engine's native sheet (frozen panes, gridlines, column widths) before any row is written. Backed by the new `Engine\Contracts\ExposesNativeSheet`, implemented by both writers.
 - `AfterWriting` export event with the finished file's local path, fired after the writer closes and before the file is stored, downloaded or uploaded by `QueuedExportJob`; the temporary file is removed if a listener throws.
 - `Engine\Contracts\WritesNativeRows`, implemented by the OpenSpout writer.
+
+---
+
+## [1.0.0] — 2026-09-23
+
+### Changed
+- **Breaking:** date-styled cells now reach imports as **Excel serial numbers** (int, or float with a time part) instead of `DateTimeImmutable`, matching Laravel Excel. Import helpers written against Laravel Excel (`Date::excelToDateTimeObject()`, `Carbon::createFromFormat()`, `trim()` on every cell…) work without modification. Set `dates.import_as` to `'datetime'` to keep the previous behaviour.
+- **Breaking:** the unused `dates.coerce` config key is replaced by `dates.import_as` (`'serial'` | `'datetime'`).
+- `dates.timezone` is applied before serial conversion, so the serial reflects the local wall-clock time.
+- `PhpSpreadsheetSheetReader` now takes the reader options array (same shape as `OpenSpoutSheetReader`) instead of positional timezone / formula arguments.
+
+### Added
 - `WithFormatData` concern — receive cells as display strings rendered through their number format (Laravel Excel parity). Enables `SHOULD_FORMAT_DATES` on the OpenSpout engine, layered onto any `WithReaderOptions`; uses `NumberFormat::toFormattedString()` on the PhpSpreadsheet engine.
 - `Support\CellNormalizer` — converts `DateTimeInterface` / `DateInterval` cells to 1900-system Excel serials, including the 1900 leap-year quirk for dates before March 1900.
 - `dates.import_as` is validated; an unknown value throws `InvalidArgumentException`.
