@@ -176,11 +176,7 @@ class UsersExport implements FromQuery, WithHeadings, WithHeadingStyle
 
     public function headingStyle(): Style
     {
-        $style = new Style;
-        $style->setFontBold();
-        $style->setFontSize(14);
-
-        return $style;
+        return new Style(fontBold: true, fontSize: 14);
     }
 }
 ```
@@ -200,11 +196,7 @@ class UsersExport implements FromQuery, WithHeadings, WithDefaultRowStyle
 
     public function defaultRowStyle(): Style
     {
-        $style = new Style;
-        $style->setFontSize(11);
-        $style->setFontName('Arial');
-
-        return $style;
+        return new Style(fontSize: 11, fontName: 'Arial');
     }
 }
 ```
@@ -230,24 +222,17 @@ class InvoicesExport implements FromQuery, WithHeadings, WithColumnStyles
     /** @return array<int, Style> */
     public function columnStyles(): array
     {
-        $amountStyle = new Style;
-        $amountStyle->setFormat('#,##0.00');
-        $amountStyle->setFontColor(Color::DARK_BLUE);
-
-        $dateStyle = new Style;
-        $dateStyle->setFormat('yyyy-mm-dd');
-
         return [
-            1 => $amountStyle,  // Column B (Amount)
-            2 => $dateStyle,    // Column C (Date)
+            1 => new Style(fontColor: Color::DARK_BLUE, format: '#,##0.00'),  // Column B (Amount)
+            2 => new Style(format: 'yyyy-mm-dd'),                             // Column C (Date)
         ];
     }
 }
 ```
 
-You can combine all three styling concerns on the same export class.
+You can combine all three styling concerns on the same export class. Each data cell gets exactly one style: its column style if it has one, otherwise the default row style — the two are not merged. To keep, say, a font from `defaultRowStyle()` on a styled column, include it in that column's style.
 
-> **Note:** OpenSpout styles use the `OpenSpout\Common\Entity\Style\Style` class. See the [OpenSpout documentation](https://github.com/openspout/openspout) for the full list of style properties (borders, alignment, background color, text rotation, etc.).
+> **Note:** OpenSpout styles use the `OpenSpout\Common\Entity\Style\Style` class, which is immutable: set properties through the constructor's named arguments, or derive a variant with the `with*()` methods (`$base->withFontBold(true)`), which return a new instance. See the [OpenSpout documentation](https://github.com/openspout/openspout) for the full list of style properties (borders, alignment, background color, text rotation, etc.).
 
 ---
 
@@ -340,12 +325,11 @@ class UsersExport implements FromQuery, WithHeadings, WithWriterOptions
 
     public function writerOptions(): object
     {
-        $options = new Options;
-        $options->FIELD_DELIMITER = ';';
-        $options->FIELD_ENCLOSURE = "'";
-        $options->SHOULD_ADD_BOM = false;
-
-        return $options;
+        return new Options(
+            FIELD_DELIMITER: ';',
+            FIELD_ENCLOSURE: "'",
+            SHOULD_ADD_BOM: false,
+        );
     }
 }
 ```

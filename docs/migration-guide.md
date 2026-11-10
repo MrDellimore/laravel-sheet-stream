@@ -143,16 +143,12 @@ class UsersExport implements WithHeadingStyle, WithColumnStyles
 {
     public function headingStyle(): Style
     {
-        $style = new Style;
-        $style->setFontBold();
-        return $style;
+        return new Style(fontBold: true);
     }
 
     public function columnStyles(): array
     {
-        $amountStyle = new Style;
-        $amountStyle->setFormat('#,##0.00');
-        return [1 => $amountStyle]; // Column B (0-indexed)
+        return [1 => new Style(format: '#,##0.00')]; // Column B (0-indexed)
     }
 }
 ```
@@ -183,10 +179,7 @@ class CsvImport implements WithReaderOptions
 {
     public function readerOptions(): object
     {
-        $options = new Options;
-        $options->FIELD_DELIMITER = ';';
-        $options->FIELD_ENCLOSURE = "'";
-        return $options;
+        return new Options(FIELD_DELIMITER: ';', FIELD_ENCLOSURE: "'");
     }
 }
 ```

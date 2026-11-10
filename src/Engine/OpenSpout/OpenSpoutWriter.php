@@ -116,17 +116,17 @@ final class OpenSpoutWriter implements ExposesNativeSheet, Writer, WritesNativeR
      */
     private function resolveDateStyle(DateTimeInterface $value, ?object $colStyle): Style
     {
-        if ($colStyle instanceof Style && $colStyle->getFormat() !== null) {
+        if ($colStyle instanceof Style && $colStyle->format !== null) {
             return $colStyle;
         }
 
         $hasTime = $value->format('H:i:s') !== '00:00:00';
 
         if ($hasTime) {
-            return $this->dateTimeStyle ??= (new Style)->setFormat($this->dateTimeFormat);
+            return $this->dateTimeStyle ??= (new Style)->withFormat($this->dateTimeFormat);
         }
 
-        return $this->dateStyle ??= (new Style)->setFormat($this->dateFormat);
+        return $this->dateStyle ??= (new Style)->withFormat($this->dateFormat);
     }
 
     public function acceptsNativeRow(mixed $row): bool

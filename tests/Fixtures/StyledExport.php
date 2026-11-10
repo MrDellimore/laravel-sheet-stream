@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrDellimore\SheetStream\Tests\Fixtures;
 
 use Illuminate\Support\Collection;
@@ -29,27 +31,16 @@ class StyledExport implements FromCollection, WithColumnStyles, WithDefaultRowSt
 
     public function headingStyle(): Style
     {
-        $style = new Style;
-        $style->setFontBold();
-        $style->setFontSize(14);
-
-        return $style;
+        return new Style(fontBold: true, fontSize: 14);
     }
 
     public function defaultRowStyle(): Style
     {
-        $style = new Style;
-        $style->setFontSize(11);
-
-        return $style;
+        return new Style(fontSize: 11);
     }
 
     public function columnStyles(): array
     {
-        $amountStyle = new Style;
-        $amountStyle->setFormat('#,##0.00');
-        $amountStyle->setFontColor(Color::DARK_BLUE);
-
-        return [1 => $amountStyle];
+        return [1 => new Style(fontColor: Color::DARK_BLUE, format: '#,##0.00')];
     }
 }

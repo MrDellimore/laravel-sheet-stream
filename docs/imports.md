@@ -278,11 +278,7 @@ class SemicolonImport implements ToArray, WithHeadingRow, WithReaderOptions
 
     public function readerOptions(): object
     {
-        $options = new Options;
-        $options->FIELD_DELIMITER = ';';
-        $options->ENCODING = 'UTF-8';
-
-        return $options;
+        return new Options(FIELD_DELIMITER: ';', ENCODING: 'UTF-8');
     }
 }
 ```

@@ -154,16 +154,28 @@ it('returns formatted date strings when the import uses WithFormatData', functio
 });
 
 it('layers WithFormatData onto native options supplied via WithReaderOptions', function () {
-    $tmp = dateFixture('mm/dd/yyyy');
-    $native = new XlsxOptions;
-    $native->SHOULD_PRESERVE_EMPTY_ROWS = true;
+    $tmp = tempnam(sys_get_temp_dir(), 'date_fixture_').'.xlsx';
+    $writer = new OpenSpoutWriter('xlsx', null, dateFormat: 'mm/dd/yyyy');
+    $writer->openToFile($tmp);
+    $writer->addSheet(null);
+    $writer->addRow(['Name', 'Date']);
+    $writer->addRow(['Alice', new DateTimeImmutable('2025-06-15')]);
+    $writer->addRow([]);
+    $writer->addRow(['Bob', new DateTimeImmutable('2025-12-25')]);
+    $writer->close();
+
+    $native = new XlsxOptions(SHOULD_PRESERVE_EMPTY_ROWS: true);
 
     try {
         $rows = readWith(new OpenSpoutReader(['formatData' => true], $native), $tmp);
 
-        expect($native->SHOULD_FORMAT_DATES)->toBeTrue()
-            ->and($native->SHOULD_PRESERVE_EMPTY_ROWS)->toBeTrue()
-            ->and($rows[0]['date'])->toBe('06/15/2025');
+        // The empty row survives (native option kept) and dates are formatted
+        // (WithFormatData applied) — on a copy, since OpenSpout Options are readonly.
+        expect($rows)->toHaveCount(3)
+            ->and($rows[0]['date'])->toBe('06/15/2025')
+            ->and($rows[1])->toBe(['name' => null, 'date' => null])
+            ->and($rows[2]['date'])->toBe('12/25/2025')
+            ->and($native->SHOULD_FORMAT_DATES)->toBeFalse();
     } finally {
         @unlink($tmp);
     }

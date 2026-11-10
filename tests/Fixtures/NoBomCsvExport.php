@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrDellimore\SheetStream\Tests\Fixtures;
 
 use Illuminate\Support\Collection;
@@ -26,9 +28,6 @@ class NoBomCsvExport implements FromCollection, WithHeadings, WithWriterOptions
 
     public function writerOptions(): object
     {
-        $options = new Options;
-        $options->SHOULD_ADD_BOM = false;
-
-        return $options;
+        return new Options(SHOULD_ADD_BOM: false);
     }
 }

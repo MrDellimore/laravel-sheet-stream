@@ -11,13 +11,7 @@ final class RowHelper
 {
     public static function isEmptyRow(array $row): bool
     {
-        foreach ($row as $cell) {
-            if ($cell !== null && $cell !== '') {
-                return false;
-            }
-        }
-
-        return true;
+        return array_all($row, fn ($cell) => $cell === null || $cell === '');
     }
 
     /** @param Model[] $models */
