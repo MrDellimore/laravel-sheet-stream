@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace MrDellimore\SheetStream\Engine\Rust;
 
 use DateTimeInterface;
+use MrDellimore\SheetStream\Engine\Contracts\ReadsFirstRow;
 use MrDellimore\SheetStream\Engine\Contracts\SheetReader;
 use MrDellimore\SheetStream\Support\CellNormalizer;
 use RustySheet\Reader as NativeReader;
 
-final readonly class RustSheetReader implements SheetReader
+final readonly class RustSheetReader implements ReadsFirstRow, SheetReader
 {
     public function __construct(
         private NativeReader $reader,
@@ -40,5 +41,24 @@ final readonly class RustSheetReader implements SheetReader
                 yield $this->convertDatesToSerial ? CellNormalizer::normalize($row) : $row;
             }
         }
+    }
+
+    /**
+     * Asks the extension for a single row, so reading a header leaves the rest of the
+     * sheet unparsed (rows() would fetch a whole batch).
+     *
+     * @return array<int|string, scalar|null|DateTimeInterface>|null
+     */
+    public function firstRow(): ?array
+    {
+        $batch = $this->reader->nextRows($this->index, 1);
+
+        if ($batch === []) {
+            return null;
+        }
+
+        $row = reset($batch);
+
+        return $this->convertDatesToSerial ? CellNormalizer::normalize($row) : $row;
     }
 }
