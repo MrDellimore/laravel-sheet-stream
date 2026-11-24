@@ -36,6 +36,7 @@ class ImportRunner
     public function __construct(
         private readonly int $defaultBatchSize = 1000,
         private readonly string $headingFormatter = 'slug',
+        private readonly bool $blankCellsAsNull = true,
     ) {}
 
     public function runSheet(object $import, SheetReader $sheetReader, ?EventBus $bus = null, int $sheetIndex = 0): void
@@ -120,6 +121,10 @@ class ImportRunner
 
             if ($skipsEmpty && RowHelper::isEmptyRow($rawRow)) {
                 continue;
+            }
+
+            if ($this->blankCellsAsNull) {
+                $rawRow = RowHelper::blanksToNull($rawRow);
             }
 
             $row = $headings !== null

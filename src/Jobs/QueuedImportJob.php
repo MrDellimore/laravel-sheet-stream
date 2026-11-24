@@ -16,6 +16,7 @@ use MrDellimore\SheetStream\Imports\ImportRunner;
 use MrDellimore\SheetStream\Support\ConfiguresFromConcern;
 use MrDellimore\SheetStream\Support\EventBus;
 use MrDellimore\SheetStream\Support\ResolvesTempFile;
+use MrDellimore\SheetStream\Support\RowHelper;
 
 class QueuedImportJob implements ShouldQueue
 {
@@ -25,6 +26,12 @@ class QueuedImportJob implements ShouldQueue
 
     public ?int $timeout = null;
 
+    /**
+     * null = decide from config when the job runs. Not a promoted property: it needs a real
+     * default so payloads queued before this property existed still unserialize.
+     */
+    public ?bool $blankCellsAsNull = null;
+
     public function __construct(
         public object $import,
         public string $filePath,
@@ -32,7 +39,9 @@ class QueuedImportJob implements ShouldQueue
         public array $readerOptions = [],
         public int $batchSize = 1000,
         public string $headingFormatter = 'slug',
+        ?bool $blankCellsAsNull = null,
     ) {
+        $this->blankCellsAsNull = $blankCellsAsNull;
         $this->applyJobConfig($import);
     }
 
@@ -54,7 +63,7 @@ class QueuedImportJob implements ShouldQueue
             $reader->open($localPath);
 
             try {
-                $runner = new ImportRunner($this->batchSize, $this->headingFormatter);
+                $runner = new ImportRunner($this->batchSize, $this->headingFormatter, $this->blankCellsAsNull());
                 $runner->run($this->import, $reader, $bus);
             } catch (\Throwable $e) {
                 $bus?->dispatch(new ImportFailed($this->import, $e));
@@ -94,6 +103,7 @@ class QueuedImportJob implements ShouldQueue
                             readerOptions: $this->readerOptions,
                             batchSize: $this->batchSize,
                             headingFormatter: $this->headingFormatter,
+                            blankCellsAsNull: $this->blankCellsAsNull(),
                         );
                     }
                 }
@@ -103,5 +113,10 @@ class QueuedImportJob implements ShouldQueue
         } finally {
             $this->cleanupTempFile($localPath);
         }
+    }
+
+    private function blankCellsAsNull(): bool
+    {
+        return $this->blankCellsAsNull ?? RowHelper::blankCellsAsNull(config('sheet-stream.blank_cells'));
     }
 }
