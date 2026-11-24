@@ -15,6 +15,8 @@ return [
     'batch_size'     => 1000,
     'chunk_size'     => 1000,
     'temp_path'      => null,
+    'collection_rows' => 'collection',
+    'blank_cells'    => null,
     'dates' => [
         'import_as'       => 'serial',
         'timezone'        => null,
@@ -83,7 +85,7 @@ Cell borders, hyperlinks (with tooltips), comments, merged cells and data valida
 
 **Default:** `1000`
 
-The number of Eloquent models buffered before flushing to the database during `ToModel` imports. This is the default value — individual imports can override it by implementing `WithBatchInserts`:
+The number of Eloquent models buffered before flushing to the database during `ToModel` imports; each buffered model is written with `save()`. Individual imports can override the size by implementing `WithBatchInserts`, which also [switches the flush to one bulk `INSERT` per model class](imports.md#withbatchinserts):
 
 ```php
 use MrDellimore\SheetStream\Concerns\WithBatchInserts;
@@ -107,6 +109,8 @@ The number of rows per chunk when using `FromQuery` exports. The query is execut
 
 **Tuning:** Larger chunks reduce the number of database queries but use more memory per chunk. The default of 1000 works well for most cases.
 
+This option does not set the chunk size of a `WithChunkReading` import: that comes from the import's own `chunkSize()` method (see [Chunk reading](imports.md#chunk-reading)).
+
 ### `temp_path`
 
 **Default:** `null` (uses `sys_get_temp_dir()`)
@@ -115,6 +119,44 @@ Directory for temporary files created during exports. Set this when the default 
 
 ```php
 'temp_path' => storage_path('app/temp'),
+```
+
+### `collection_rows`
+
+**Default:** `'collection'`
+
+What each row of the `Collection` passed to `ToCollection::collection()` is.
+
+| Value | Each row is | Use it when |
+|---|---|---|
+| `'collection'` | an `Illuminate\Support\Collection` | You are coming from Laravel Excel, whose importers call `$row->toArray()`, `$row->get()` and other Collection methods on a row. |
+| `'array'` | a plain array | Your `collection()` code was written for Sheet Stream 1.2 or earlier and uses `is_array($row)`, `array_*($row)` or array type hints on a row. |
+
+Array access (`$row['name']`), `isset()` and `foreach` work the same with either value, so most code does not care.
+
+The setting covers every way `collection()` is reached: synchronous and queued imports, `WithChunkReading`, and the staging pipeline. Queued jobs carry the value that was in effect when the import was queued, so changing it does not affect jobs already on the queue. `ToArray` imports always receive plain arrays.
+
+Any other value throws an `InvalidArgumentException` when the import starts or is queued.
+
+### `blank_cells`
+
+**Default:** `null`
+
+What a blank cell is when it reaches your import class.
+
+| Value | A blank cell arrives as | Notes |
+|---|---|---|
+| `null` | `null`, wherever it sits in the row | Laravel Excel compatible. |
+| `''` | whatever the reader yields | The behaviour before this option existed: the `openspout` and `rust` drivers yield `''` for a blank inside the row (and for any blank CSV field), the `phpspreadsheet` driver yields `null`; cells past the end of a short row are padded with `null`. |
+
+Only an exactly empty cell counts as blank. `0`, `'0'`, `false` and whitespace-only text are values and are never converted. A cell that explicitly stores an empty string is indistinguishable from a blank one in the streaming readers, so it becomes `null` too.
+
+The setting applies to every data row on every import path (`ToModel`, `ToCollection`, `ToArray`, `OnEachRow`, with or without `WithHeadingRow`, synchronous, queued and staged), before `WithValidation` runs. It matters for validation: Laravel skips non-implicit rules such as `integer` or `date` for `''` but applies them to `null`, so add `nullable` to rules for columns that may be blank, exactly as with Laravel Excel.
+
+Any other value (including the string `'null'`) throws an `InvalidArgumentException` when an import starts. Queued imports capture the setting when they are dispatched.
+
+```php
+'blank_cells' => '', // keep the pre-existing behaviour
 ```
 
 ### `dates.import_as`

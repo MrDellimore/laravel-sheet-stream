@@ -18,12 +18,15 @@ use MrDellimore\SheetStream\Events\AfterWriting;
 use MrDellimore\SheetStream\Events\ImportFailed;
 use MrDellimore\SheetStream\Exceptions\UnsupportedByEngine;
 use MrDellimore\SheetStream\Exports\ExportRunner;
+use MrDellimore\SheetStream\Imports\FileInspector;
 use MrDellimore\SheetStream\Imports\ImportRunner;
 use MrDellimore\SheetStream\Jobs\QueuedExportJob;
 use MrDellimore\SheetStream\Jobs\QueuedImportJob;
 use MrDellimore\SheetStream\Jobs\StagingProducerJob;
 use MrDellimore\SheetStream\Support\CellNormalizer;
+use MrDellimore\SheetStream\Support\CollectionRows;
 use MrDellimore\SheetStream\Support\EventBus;
+use MrDellimore\SheetStream\Support\RowHelper;
 use MrDellimore\SheetStream\Support\TempFileResolver;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -61,6 +64,8 @@ class SheetStreamManager
             $runner = new ImportRunner(
                 (int) ($this->app['config']['sheet-stream.batch_size'] ?? 1000),
                 $this->headingFormatter(),
+                collectionRows: $this->collectionRows(),
+                blankCellsAsNull: $this->blankCellsAsNull(),
             );
             $runner->run($import, $reader, $bus);
         } catch (\Throwable $e) {
@@ -73,6 +78,32 @@ class SheetStreamManager
         }
 
         return null;
+    }
+
+    /**
+     * The first row of every sheet, keyed by sheet name in workbook order, read through the
+     * configured reader driver without reading the rest of the file. Row 1 is the header
+     * even when it is blank; a blank first row and an empty sheet both give [].
+     *
+     * @param  bool  $formatted  Return the headings as WithHeadingRow keys them
+     *                           (sheet-stream.heading_formatter) instead of the raw cell values.
+     * @return array<string, array<int, mixed>>
+     */
+    public function headers(string $path, ?string $disk = null, bool $formatted = false): array
+    {
+        return $this->inspector()->headers($path, $disk, $this->readerOptions(), $formatted);
+    }
+
+    /**
+     * How many rows importing this file would hand to the import class, per sheet the
+     * import processes, keyed by sheet name in workbook order: the heading row is left
+     * out under WithHeadingRow, and so are the rows SkipsEmptyRows drops.
+     *
+     * @return array<string, int>
+     */
+    public function countRows(object $import, string $path, ?string $disk = null): array
+    {
+        return $this->inspector()->countRows($import, $path, $disk, $this->readerOptions($import));
     }
 
     public function download(object $export, string $filename): StreamedResponse
@@ -152,6 +183,8 @@ class SheetStreamManager
                 chunkSize: (int) ($this->app['config']['sheet-stream.chunk_size'] ?? 1000),
                 insertBatchSize: (int) ($this->app['config']['sheet-stream.staging.insert_batch_size'] ?? 500),
                 headingFormatter: $this->headingFormatter(),
+                collectionRows: $this->collectionRows(),
+                blankCellsAsNull: $this->blankCellsAsNull(),
             ));
         }
 
@@ -162,6 +195,8 @@ class SheetStreamManager
             readerOptions: $this->readerOptions($import),
             batchSize: (int) ($this->app['config']['sheet-stream.batch_size'] ?? 1000),
             headingFormatter: $this->headingFormatter(),
+            collectionRows: $this->collectionRows(),
+            blankCellsAsNull: $this->blankCellsAsNull(),
         ));
     }
 
@@ -245,7 +280,7 @@ class SheetStreamManager
         return $tmp;
     }
 
-    private function readerOptions(object $import): array
+    private function readerOptions(?object $import = null): array
     {
         return [
             'dates' => [
@@ -255,6 +290,14 @@ class SheetStreamManager
             'calculateFormulas' => $import instanceof WithCalculatedFormulas,
             'formatData' => $import instanceof WithFormatData,
         ];
+    }
+
+    private function inspector(): FileInspector
+    {
+        return new FileInspector(
+            (string) ($this->app['config']['sheet-stream.default_reader'] ?? 'openspout'),
+            $this->headingFormatter(),
+        );
     }
 
     private function writerOptions(): array
@@ -279,6 +322,19 @@ class SheetStreamManager
     private function headingFormatter(): string
     {
         return (string) ($this->app['config']['sheet-stream.heading_formatter'] ?? 'slug');
+    }
+
+    /** What each row handed to ToCollection::collection() is: 'collection' or 'array'. */
+    private function collectionRows(): string
+    {
+        return CollectionRows::assertValid(
+            (string) ($this->app['config']['sheet-stream.collection_rows'] ?? CollectionRows::AS_COLLECTION)
+        );
+    }
+
+    private function blankCellsAsNull(): bool
+    {
+        return RowHelper::blankCellsAsNull($this->app['config']['sheet-stream.blank_cells'] ?? null);
     }
 
     private function tempPath(): string

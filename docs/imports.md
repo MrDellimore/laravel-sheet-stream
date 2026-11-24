@@ -22,7 +22,7 @@ For synchronous imports, `$filePath` should be an absolute path to an `.xlsx`, `
 
 ### ToModel
 
-Map each row to an Eloquent model. Models are saved row-by-row in a streaming fashion — this is the most memory-efficient import strategy.
+Map each row to an Eloquent model. Models are buffered and written in batches as the sheet streams — this is the most memory-efficient import strategy. Each model is written with `save()`, so model events, observers and auditing run; add [`WithBatchInserts`](#withbatchinserts) to write each batch with a single bulk `INSERT` instead.
 
 ```php
 use App\Models\Claimant;
@@ -58,17 +58,27 @@ class ClaimantsImport implements ToCollection, WithHeadingRow
     public function collection(Collection $rows): void
     {
         foreach ($rows as $row) {
-            // $row is an associative array: ['name' => '...', 'email' => '...']
+            // $row is a Collection: $row['name'], $row->get('email'), $row->toArray()
         }
     }
 }
 ```
 
-> **Note:** `ToCollection` buffers all rows in memory. For very large files, prefer `ToModel` which streams row-by-row.
+**Each row is an `Illuminate\Support\Collection`**, as in Laravel Excel, keyed by heading with `WithHeadingRow` and by column position without it. `$row['name']`, `isset($row['name'])` and `foreach ($row as $heading => $value)` behave as they do on an array; `is_array($row)` is `false` and the `array_*()` functions need `$row->toArray()` (or `$row->all()`).
+
+Rows were plain arrays up to version 1.2. To keep that, set `collection_rows` to `'array'` in `config/sheet-stream.php`:
+
+```php
+'collection_rows' => 'array',
+```
+
+The setting applies wherever `collection()` is called: `SheetStream::import()`, queued imports, [`WithChunkReading`](#chunk-reading) and the [`UsesStagingTable`](#usesstagingtable-large-file-pipeline) pipeline. A queued import uses the value in effect when it was queued.
+
+> **Note:** `ToCollection` buffers all rows in memory. For large files, add [`WithChunkReading`](#chunk-reading) to receive the sheet a chunk at a time, or use `ToModel`, which streams row-by-row.
 
 ### ToArray
 
-Same as `ToCollection` but receives a plain PHP array.
+Same as `ToCollection` but receives a plain PHP array of plain arrays, whatever `collection_rows` is set to. With [`WithChunkReading`](#chunk-reading) it is called once per chunk.
 
 ```php
 use MrDellimore\SheetStream\Concerns\ToArray;
@@ -107,9 +117,22 @@ Without `WithHeadingRow`, rows are delivered as numerically-indexed arrays.
 
 **Heading normalization:** headings are lowercased and trimmed. `" First Name "` becomes `"first name"`.
 
+### Blank cells
+
+A blank cell reaches your import as `null`, wherever it sits in the row and whichever driver read it — the same as Laravel Excel. That holds for every import concern, with or without `WithHeadingRow`, and for queued and staged imports.
+
+```php
+// Sheet row:  Alice | (blank) | 0 | (blank)
+['name' => 'Alice', 'email' => null, 'visits' => 0, 'phone' => null]
+```
+
+Only an exactly empty cell is blank: `0`, `'0'`, `false` and whitespace-only text arrive unchanged. The heading row is not affected.
+
+To get the earlier behaviour back (the reader's own value: `''` for a blank inside the row on the `openspout` and `rust` drivers, `null` only for cells past the end of a short row), set [`blank_cells`](configuration.md#blank_cells) to `''`.
+
 ### WithBatchInserts
 
-Controls the buffer size for `ToModel` imports. Models are accumulated in a buffer and flushed (saved) when the buffer reaches the specified size.
+Sets the batch size for `ToModel` imports **and switches them to bulk inserts**, as in Laravel Excel: each batch is written with one query-builder `INSERT` per model class instead of one `save()` per model.
 
 ```php
 use MrDellimore\SheetStream\Concerns\WithBatchInserts;
@@ -125,11 +148,29 @@ class ClaimantsImport implements ToModel, WithHeadingRow, WithBatchInserts
 }
 ```
 
-If you don't implement `WithBatchInserts`, the default batch size from `config('sheet-stream.batch_size')` (default: 1000) is used.
+If you don't implement `WithBatchInserts`, models are buffered up to `config('sheet-stream.batch_size')` (default: 1000) and each one is written with `save()`.
+
+| | Without `WithBatchInserts` | With `WithBatchInserts` |
+|---|---|---|
+| Statements for N models | N (`save()` each) | one `INSERT` per model class per batch |
+| Model events, observers, auditing traits | fire | **do not fire** |
+| `created_at` / `updated_at` | set by `save()` | set the same way (skipped when `$timestamps = false`, kept when the model already has a value) |
+| Casts and mutators | applied | applied — the row is the model's stored attributes |
+| Model's key after the write | populated | not populated |
+
+What to know about the bulk path:
+
+- **No model events.** `creating`, `created`, `saving`, `saved`, observers and anything built on them (auditing, `$touches`, search indexing) are bypassed. If you need them, don't implement `WithBatchInserts`.
+- **Mixed model classes** in one batch get one `INSERT` each. Models are grouped by class, connection and table, so a model on another connection (class-level `$connection` or `setConnection()`) lands where `save()` would put it.
+- **Different attribute sets.** A multi-row `INSERT` takes its columns from the first row, so models of one class that set different attributes are written with one `INSERT` per distinct attribute set (columns you did not set keep their database default). Return the same keys from every `model()` call to get exactly one statement per batch.
+- **Existing models.** A model that already exists (e.g. from `firstOrNew()`) is updated with `save()` rather than inserted again.
+- **Failures throw.** A failing `INSERT` raises the database exception (and `ImportFailed`); a multi-row `INSERT` is atomic, so none of that statement's rows are written. Batches written earlier stay, as they do with `save()` — wrap the import in a transaction if you need all-or-nothing.
+- **Placeholder limits.** One statement binds `batchSize() × columns` values. Keep that under your database's limit (65,535 for MySQL and PostgreSQL, 2,100 for SQL Server).
+- A `batchSize()` of `1` keeps the `save()` path, as in Laravel Excel.
 
 ### SkipsEmptyRows
 
-Skip rows where every cell is `null` or an empty string. This is a marker interface — just implement it, no methods required.
+Skip rows where every cell is blank (`null` or an empty string, whatever [`blank_cells`](configuration.md#blank_cells) is set to). A row holding only `0`, `false` or whitespace is not empty. This is a marker interface — just implement it, no methods required.
 
 ```php
 use MrDellimore\SheetStream\Concerns\SkipsEmptyRows;
@@ -142,6 +183,114 @@ class ClaimantsImport implements ToArray, SkipsEmptyRows
     }
 }
 ```
+
+---
+
+## Chunk reading
+
+### WithChunkReading
+
+By default `collection()` / `array()` is called once, with every row of the sheet. Implement `WithChunkReading` to process the sheet in chunks instead: memory stays flat however large the file is, and progress events line up with the work actually done.
+
+```php
+use Illuminate\Support\Collection;
+use MrDellimore\SheetStream\Concerns\ToCollection;
+use MrDellimore\SheetStream\Concerns\WithChunkReading;
+use MrDellimore\SheetStream\Concerns\WithHeadingRow;
+
+class LiensImport implements ToCollection, WithChunkReading, WithHeadingRow
+{
+    public function collection(Collection $rows): void
+    {
+        // Called once per 500 rows, and once more for the remainder.
+    }
+
+    public function chunkSize(): int
+    {
+        return 500;
+    }
+}
+```
+
+The file is still read once, front to back. (Laravel Excel re-opens the file for every chunk; Sheet Stream does not.)
+
+**What a chunk is.** `chunkSize()` consecutive data rows. The heading row and rows dropped by `SkipsEmptyRows` do not count. Rows are counted *before* validation, so a row that fails validation still takes its slot: where the chunks fall depends only on the file, never on which rows fail. A sheet with `N` data rows therefore always produces `ceil(N / chunkSize())` chunks, which is what makes a progress bar's total computable up front.
+
+**What happens at each chunk boundary**, and at the end of the sheet for the last, partial chunk:
+
+```mermaid
+sequenceDiagram
+    participant R as ImportRunner
+    participant I as Your import
+    participant L as AfterChunk listeners
+    Note over R: read chunkSize() rows, validating each
+    R->>I: onFailure(failures of this chunk)
+    Note right of I: only with SkipsOnFailure, and only if a row failed
+    R->>I: collection(rows) / array(rows)
+    Note right of I: ToModel: the remaining models are saved instead
+    R->>L: AfterChunk
+    Note over R: the chunk is released, the next one starts
+```
+
+1. `onFailure()` receives this chunk's failures (with `SkipsOnFailure`, when there are any).
+2. The rows are handed over:
+   - `ToCollection` / `ToArray`: `collection()` / `array()` is called with the chunk's valid rows. If every row of the chunk failed validation the call is skipped.
+   - `ToModel`: models are saved every `batchSize()` rows as usual, and whatever is left is saved at the chunk boundary.
+   - `OnEachRow`: nothing to do; `onRow()` was already called for each row.
+3. `AfterChunk` is dispatched. It fires for every chunk, including one whose rows all failed or (for `ToModel`) produced no model, so progress always advances.
+4. The chunk's rows and failures are released.
+
+A sheet with no data rows makes no `collection()` / `array()` call and fires no `AfterChunk`.
+
+Without `SkipsOnFailure`, the first invalid row throws a `ValidationException`. Chunks before it have already been processed; the chunk it belongs to is not delivered.
+
+| | Without `WithChunkReading` | With `WithChunkReading` |
+|---|---|---|
+| `collection()` / `array()` | once per sheet, after the last row (also for an empty sheet) | once per chunk |
+| `onFailure()` | once per sheet, at the end | once per chunk, before the rows |
+| `AfterChunk` fires | every `batchSize()` delivered rows | every `chunkSize()` rows, after the chunk's work |
+| Rows that fail validation | do not count toward a batch | count toward the chunk |
+| `ToModel` rows returning `null` | do not count toward a batch | count toward the chunk |
+| `ToModel` saves | every `batchSize()` models | every `batchSize()` models and at each chunk boundary |
+| Keys of the rows handed over | `0, 1, 2, …` | row number minus the chunk offset (below) |
+
+`batchSize()` has no effect on `collection()` / `array()`: with chunk reading only `chunkSize()` decides how many rows each call gets.
+
+**`AfterChunk`** carries the import (`$sheet`), `$sheetIndex`, `$chunkNumber` (0-based, restarting on each sheet), `$rowsInChunk` (rows counted in the chunk, failed ones included) and `$startRow` (the row number of the chunk's first row; `null` in the staging pipeline, which does not track it).
+
+**Multiple sheets.** A sheet import without its own `WithChunkReading` uses the `chunkSize()` of the parent `WithMultipleSheets` import, which is where Laravel Excel reads it. A sheet's own `chunkSize()` wins. This holds for queued and `WithParallelSheets` imports too.
+
+`chunkSize()` must be at least 1; anything else throws `InvalidConcernCombination` before the import starts.
+
+> `WithChunkReading` applies to imports read directly: `SheetStream::import()` and `ShouldQueue` imports. The [`UsesStagingTable`](#usesstagingtable-large-file-pipeline) pipeline has its own chunking (the `chunk_size` config option) and ignores it.
+
+### Chunk offsets and row keys
+
+With chunk reading, `getChunkOffset()` (from the `RemembersChunkOffset` trait) is the row number of the chunk's first row, and it is set before that row is validated. The rows handed to `collection()` / `array()` are keyed by their distance from it, so **`getChunkOffset() + $key` is the spreadsheet row number** of every row:
+
+```php
+public function collection(Collection $rows): void
+{
+    foreach ($rows as $index => $row) {
+        $spreadsheetRow = $this->getChunkOffset() + $index;
+        // ...
+    }
+}
+```
+
+Rows that failed validation or were skipped leave gaps in the keys rather than renumbering what follows. Use `$rows->values()` if you need a `0..n-1` list. The keys are the same whether the rows are Collections or arrays (`collection_rows`).
+
+### Row numbers per driver
+
+Row numbers (`Failure::row()`, `getRowNumber()`, `getChunkOffset()`, `AfterChunk::$startRow`) are 1-based and count the heading row. How blank rows affect them depends on the reader driver, with or without chunk reading:
+
+| Driver | Row numbers | Blank rows |
+|---|---|---|
+| `rust` | The real spreadsheet row. For CSV, the line a record starts on. | Left out by the reader; the rows below keep their numbers. |
+| `phpspreadsheet` | The real spreadsheet row. For CSV, the record number (a quoted value spanning lines shifts what follows). | Delivered as rows of `null`; add `SkipsEmptyRows` to drop them. |
+| `openspout` | The order rows arrive in. | Left out by the reader, so **every row below a blank row is numbered one too low**. OpenSpout does not expose the row number. |
+
+The `rust` driver hands `.ods` files, non-UTF-8 CSV and workbooks forced to the 1904 date system to OpenSpout, and those files are numbered the OpenSpout way.
 
 ---
 
@@ -170,9 +319,16 @@ class ClaimantsImport implements ToModel, WithHeadingRow, WithValidation
 
 The rule keys match the row keys — when using `WithHeadingRow`, these are the lowercased heading names. Without `WithHeadingRow`, use numeric indices (`'0'`, `'1'`, etc.).
 
+Rows are validated after blank cells have been turned into `null` (see [Blank cells](#blank-cells)). Laravel applies a rule like `integer` to `null` but skips it for `''`, so a column that may be blank needs `nullable`:
+
+```php
+'quantity' => ['nullable', 'integer'], // blank is fine, "abc" is not
+'name'     => ['required'],            // blank fails, as it always did
+```
+
 ### SkipsOnFailure
 
-Instead of throwing on the first invalid row, continue processing and collect **all** validation failures. After the sheet is fully processed, the `onFailure()` method is called once with a collection of `Failure` objects — each carrying the **row number**, **errors**, and **original values**.
+Instead of throwing on the first invalid row, continue processing and collect **all** validation failures. After the sheet is fully processed, the `onFailure()` method is called once with a collection of `Failure` objects — each carrying the **row number**, **errors**, and **original values**. (With [`WithChunkReading`](#chunk-reading), `onFailure()` is called per chunk instead, with that chunk's failures.)
 
 ```php
 use Illuminate\Support\Collection;
@@ -215,6 +371,37 @@ class ClaimantsImport implements ToModel, WithHeadingRow, WithValidation, SkipsO
 | `values()` | `array<string, mixed>` | The original row data that failed validation |
 
 > **This is an improvement over Laravel Excel**, which only returns the first validation failure. Sheet Stream collects them all, with row numbers so you can tell the user exactly where to look.
+
+`SkipsOnFailure` may be declared without `WithValidation` (many Laravel Excel imports do). Nothing validates, so `onFailure()` is simply never called.
+
+---
+
+## Row numbers and chunk offsets
+
+### RemembersRowNumber
+
+Add the `RemembersRowNumber` trait to read the current row's 1-based spreadsheet row number (the heading row counts, so data starts at row 2) from `model()`, `onRow()` or a `WithValidation` callback:
+
+```php
+use MrDellimore\SheetStream\Concerns\RemembersRowNumber;
+
+class ClaimantsImport implements ToModel, WithHeadingRow
+{
+    use RemembersRowNumber;
+
+    public function model(array $row): ?Model
+    {
+        $rowNumber = $this->getRowNumber();
+        // ...
+    }
+}
+```
+
+### RemembersChunkOffset
+
+The `RemembersChunkOffset` trait exposes `getChunkOffset()`: the row number of the first row of the chunk being processed. See [Chunk offsets and row keys](#chunk-offsets-and-row-keys) for what it adds up to with `WithChunkReading`, and [Row numbers per driver](#row-numbers-per-driver) for how blank rows affect row numbers.
+
+Both traits work on their own, as in Laravel Excel: the importer looks for a `setRowNumber()` / `setChunkOffset()` method. The `WithRowNumber` and `WithChunkOffset` interfaces describe those methods and are optional; implement them if you write the setters yourself and want the contract checked.
 
 ---
 
@@ -388,6 +575,129 @@ Without `WithMultipleSheets`, only the first sheet is processed.
 
 ---
 
+## Events
+
+### WithEvents
+
+Implement `WithEvents` and return listeners keyed by event class from `registerEvents()`. The `RegistersEventListeners` trait builds that array for you from methods named after the events (`beforeImport()`, `afterSheet()`, `afterChunk()`, ...).
+
+```php
+use MrDellimore\SheetStream\Concerns\WithEvents;
+use MrDellimore\SheetStream\Events\AfterChunk;
+use MrDellimore\SheetStream\Events\AfterImport;
+
+class UsersImport implements ToModel, WithHeadingRow, WithEvents
+{
+    public function registerEvents(): array
+    {
+        return [
+            AfterChunk::class => fn (AfterChunk $event) => $this->progress->advance(),
+            AfterImport::class => fn (AfterImport $event) => $this->progress->finish(),
+        ];
+    }
+}
+```
+
+Every event has a scope:
+
+| Scope | Events | Delivered to |
+|---|---|---|
+| Import | `BeforeImport`, `AfterImport`, `ImportFailed` | The top-level import only |
+| Sheet | `BeforeSheet`, `AfterSheet`, `AfterChunk` | The sheet's own import, or the top-level import (see below) |
+
+`BeforeSheet` and `AfterSheet` carry `$event->sheet` (the import object handling the sheet), `$event->sheetIndex` and `$event->sheetName`. `AfterChunk` carries `$event->sheet`, `$event->sheetIndex`, `$event->chunkNumber` and `$event->rowsInChunk`.
+
+### Events in multi-sheet imports
+
+A sub-import returned from `sheets()` can implement `WithEvents` itself. Sheet-scoped events are then routed **per event class**:
+
+- If the sub-import registers a listener for the event class, **only the sub-import's listener** fires for that sheet.
+- Otherwise the **parent's** listener for that class fires, if it has one.
+
+Import-scoped events only ever go to the parent. A sub-import's listener for `BeforeImport`, `AfterImport` or `ImportFailed` is never called.
+
+```php
+class WorkbookImport implements WithMultipleSheets, WithEvents
+{
+    public function sheets(): array
+    {
+        return [
+            0 => new ClaimsSheetImport,  // registers AfterSheet
+            1 => new NotesSheetImport,   // no WithEvents
+        ];
+    }
+
+    public function registerEvents(): array
+    {
+        return [
+            BeforeImport::class => fn () => $this->start(),      // once, for the workbook
+            BeforeSheet::class => fn ($event) => $this->log($event->sheetName),  // both sheets: neither registers BeforeSheet
+            AfterSheet::class => fn ($event) => $this->done($event->sheetName),  // sheet 1 only: sheet 0 has its own
+        ];
+    }
+}
+```
+
+This is how Laravel Excel behaves for a sub-import that listens, so sheet classes written for it (each one advancing a progress bar in `AfterChunk`, or finishing its own work in `AfterSheet`) run once per event rather than once for the parent and again for the sheet. The fallback to the parent is an addition: sheets that have no listeners of their own can be observed from the parent.
+
+A sheet's listeners only ever see events of the sheets it is mapped to. Mapping one sub-import object to several sheets is fine: its listeners fire once for each of them.
+
+> **A parent cannot observe a sheet that listens for the same event.** Once a sub-import registers, say, `AfterSheet`, the parent's `AfterSheet` listener is not called for that sheet. If the parent needs to know, have the sub-import tell it (pass the parent into the sub-import's constructor), or do the workbook-level work in the parent's `AfterImport`.
+
+The same rule applies on every path: synchronous imports, `ShouldQueue`, `WithParallelSheets` and the [staging pipeline](staging-pipeline.md#events). Two path-specific details:
+
+- With `WithParallelSheets` each sheet runs in its own job and nothing spans the fan-out, so `BeforeImport` and `AfterImport` are not raised. `ImportFailed` is raised on the parent by the sheet job that failed.
+- In the staging pipeline `AfterSheet` fires when the sheet has been *staged*, before its chunks are processed. See [Staging Pipeline: Events](staging-pipeline.md#events).
+
+---
+
+## Inspecting a file before importing
+
+Two helpers read a file through the configured reader driver (`sheet-stream.default_reader`) without running an import. Both take a filesystem disk as their last path argument exactly like `import()`: the file is streamed to a temp copy, which is removed again whether the call returns or throws.
+
+### SheetStream::headers()
+
+Returns the first row of every sheet, keyed by sheet name in workbook order. Only that row is read from each sheet, so this is the cheap way to validate an upload's columns before dispatching its import.
+
+```php
+$headers = SheetStream::headers($path);          // or SheetStream::headers('imports/users.xlsx', 's3')
+// ['Users' => ['First Name', 'E-mail Address'], 'Orders' => ['Order ID', 'Total'], 'Notes' => []]
+
+$headers = SheetStream::headers($path, formatted: true);
+// ['Users' => ['first_name', 'e_mail_address'], 'Orders' => ['order_id', 'total'], 'Notes' => []]
+```
+
+- **Raw or formatted.** By default you get the cell values as the driver reads them. `formatted: true` returns them as `WithHeadingRow` keys a row, using `sheet-stream.heading_formatter`.
+- **Row 1 is the header, even when it is blank.** Empty rows are preserved for this read, so a sheet whose first row is blank gives `[]` rather than promoting the first row that has data. (An import, by contrast, takes the first row the reader yields as the heading row; the streaming drivers skip leading blank rows unless the import preserves them via `WithReaderOptions`.)
+- **Every sheet has an entry.** An empty sheet gives `[]` too, so `array_values($headers)[$sheetIndex]` lines up with the workbook's sheet order. Use `array_filter($headers)` to keep only sheets that have a header.
+- **Trailing blank cells are removed; blanks between headings stay** (as `''`, or `null` on the `phpspreadsheet` driver), so a column's position in the array is its position in the sheet.
+- **CSV** files are a single sheet. Its name depends on the driver (`''`, or `Worksheet` on `phpspreadsheet`), so read it with `reset($headers)`. The file is parsed with the default CSV settings (comma-delimited, UTF-8).
+- The `phpspreadsheet` driver loads the whole workbook whatever you ask of it, and OpenSpout parses an XLSX file's shared-strings table when it opens the file. Only the `rust` driver makes this genuinely independent of file size.
+
+### SheetStream::countRows()
+
+Returns how many rows importing the file would hand to your import class, per sheet the import processes, keyed by sheet name in workbook order. Use it to prime a progress bar before the import runs:
+
+```php
+$counts = SheetStream::countRows(new WorkbookImport, $path);   // ['Users' => 12500, 'Orders' => 0]
+
+$totalRows = array_sum($counts);
+$totalChunks = array_sum(array_map(fn (int $rows) => (int) ceil($rows / $chunkSize), $counts));
+```
+
+The count follows the import you pass, sheet by sheet:
+
+- Sheets are resolved as an import resolves them: only the first sheet without `WithMultipleSheets`; with it, the sheets mapped by index or by name. Unmapped sheets have no entry, and neither does a mapped name the workbook doesn't contain.
+- The heading row is not counted when the sheet's import uses `WithHeadingRow`.
+- Rows that `SkipsEmptyRows` drops are not counted when the sheet's import uses it.
+- The file is read with the import's own reader settings (`WithReaderOptions`, `WithCalculatedFormulas`, `WithFormatData`), so the rows counted are the rows imported.
+
+That makes the result the number of rows that reach validation; rows that then fail `WithValidation` are still counted. The import itself is never run: apart from one `sheets()` call (and `readerOptions()`), none of its methods are called and no events fire, and a `ShouldQueue` import is counted synchronously rather than dispatched.
+
+`countRows()` streams each counted sheet once, so it costs about as much as reading the file (seconds on the `rust` driver, considerably longer for a large workbook on `openspout`).
+
+---
+
 ## How the import pipeline works
 
 The `ImportRunner` processes each sheet in a streaming loop:
@@ -399,11 +709,13 @@ The `ImportRunner` processes each sheet in a streaming loop:
    - If `SkipsEmptyRows` and the row is empty: skip.
    - If headings exist: combine headings + row values into an associative array.
    - If `WithValidation`: validate the row. On failure, either throw or collect (if `SkipsOnFailure`).
-   - If `ToModel`: call `model()`, buffer the result, flush when batch size is reached.
+   - If `ToModel`: call `model()`, buffer the result, flush when batch size is reached (`save()` per model, or one bulk `INSERT` per model class with `WithBatchInserts`).
    - If `ToArray`/`ToCollection`: accumulate the row.
 5. Flush remaining buffered models.
 6. Deliver collected failures to `onFailure()` (if `SkipsOnFailure`).
 7. Deliver accumulated rows to `array()` or `collection()` (if `ToArray`/`ToCollection`).
 8. **Close** the file.
 
-Memory stays constant for `ToModel` imports because rows are never all held in memory at once.
+With [`WithChunkReading`](#chunk-reading), steps 5–7 happen at every chunk boundary instead of once at the end, in the order failures → rows → `AfterChunk`.
+
+Memory stays constant for `ToModel` imports, and for `ToArray`/`ToCollection` imports that use `WithChunkReading`, because rows are never all held in memory at once.
