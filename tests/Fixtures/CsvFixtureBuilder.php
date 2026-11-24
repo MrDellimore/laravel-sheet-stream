@@ -29,6 +29,14 @@ class CsvFixtureBuilder
         return $this;
     }
 
+    /** Write the file byte for byte, for blank lines and other things the writer normalises. */
+    public function raw(string $contents): static
+    {
+        file_put_contents($this->path, $contents);
+
+        return $this;
+    }
+
     public function path(): string
     {
         return $this->path;

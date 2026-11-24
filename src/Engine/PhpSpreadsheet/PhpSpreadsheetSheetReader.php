@@ -7,6 +7,7 @@ namespace MrDellimore\SheetStream\Engine\PhpSpreadsheet;
 use DateTimeImmutable;
 use DateTimeInterface;
 use DateTimeZone;
+use MrDellimore\SheetStream\Engine\Contracts\KeysRowsBySourceRow;
 use MrDellimore\SheetStream\Engine\Contracts\SheetReader;
 use MrDellimore\SheetStream\Support\CellNormalizer;
 use PhpOffice\PhpSpreadsheet\Cell\Cell;
@@ -15,7 +16,7 @@ use PhpOffice\PhpSpreadsheet\Shared\Date;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-final readonly class PhpSpreadsheetSheetReader implements SheetReader
+final readonly class PhpSpreadsheetSheetReader implements KeysRowsBySourceRow, SheetReader
 {
     private ?DateTimeZone $timezone;
 
@@ -53,7 +54,7 @@ final readonly class PhpSpreadsheetSheetReader implements SheetReader
                 $cells[] = $this->readCell($cell);
             }
 
-            yield $cells;
+            yield $row->getRowIndex() => $cells;
         }
     }
 

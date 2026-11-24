@@ -60,7 +60,7 @@ class QueuedSheetImportJob implements ShouldQueue
                     if ($index === $this->sheetIndex) {
                         $sheetName = $sheetReader->name();
                         $bus?->dispatch(new BeforeSheet($this->sheetImport, $this->sheetIndex, $sheetName));
-                        $runner->runSheet($this->sheetImport, $sheetReader, $bus, $this->sheetIndex);
+                        $runner->runSheet($this->sheetImport, $sheetReader, $bus, $this->sheetIndex, $this->parentImport);
                         $bus?->dispatch(new AfterSheet($this->sheetImport, $this->sheetIndex, $sheetName));
                         break;
                     }
