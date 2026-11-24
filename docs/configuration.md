@@ -15,6 +15,7 @@ return [
     'batch_size'     => 1000,
     'chunk_size'     => 1000,
     'temp_path'      => null,
+    'collection_rows' => 'collection',
     'dates' => [
         'import_as'       => 'serial',
         'timezone'        => null,
@@ -108,6 +109,8 @@ The number of rows per chunk when using `FromQuery` exports. The query is execut
 
 **Tuning:** Larger chunks reduce the number of database queries but use more memory per chunk. The default of 1000 works well for most cases.
 
+This option does not set the chunk size of a `WithChunkReading` import: that comes from the import's own `chunkSize()` method (see [Chunk reading](imports.md#chunk-reading)).
+
 ### `temp_path`
 
 **Default:** `null` (uses `sys_get_temp_dir()`)
@@ -117,6 +120,23 @@ Directory for temporary files created during exports. Set this when the default 
 ```php
 'temp_path' => storage_path('app/temp'),
 ```
+
+### `collection_rows`
+
+**Default:** `'collection'`
+
+What each row of the `Collection` passed to `ToCollection::collection()` is.
+
+| Value | Each row is | Use it when |
+|---|---|---|
+| `'collection'` | an `Illuminate\Support\Collection` | You are coming from Laravel Excel, whose importers call `$row->toArray()`, `$row->get()` and other Collection methods on a row. |
+| `'array'` | a plain array | Your `collection()` code was written for Sheet Stream 1.2 or earlier and uses `is_array($row)`, `array_*($row)` or array type hints on a row. |
+
+Array access (`$row['name']`), `isset()` and `foreach` work the same with either value, so most code does not care.
+
+The setting covers every way `collection()` is reached: synchronous and queued imports, `WithChunkReading`, and the staging pipeline. Queued jobs carry the value that was in effect when the import was queued, so changing it does not affect jobs already on the queue. `ToArray` imports always receive plain arrays.
+
+Any other value throws an `InvalidArgumentException` when the import starts or is queued.
 
 ### `dates.import_as`
 
