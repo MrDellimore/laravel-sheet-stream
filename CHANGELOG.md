@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.2.0] — 2026-11-24
+
 ### Added
 
 - **`rust` reader driver** (`'default_reader' => 'rust'`), backed by the `rusty_sheet` PHP extension. It is a streaming XLSX reader that read a real 86 MB, 396k-row workbook in 3.4 s, against about 25 minutes with the OpenSpout driver. It also reads `.csv`/`.tsv` (about 10× faster) and supports `WithFormatData`. `.ods` and non-UTF-8 CSV fall back to OpenSpout per file. It throws if the extension isn't loaded. See [configuration](docs/configuration.md#default_reader) for its small, deliberate differences from the OpenSpout driver.
@@ -16,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `rust` drivers need `rusty_sheet` `^0.1` (`pie install "mrdellimore/rusty-sheet:^0.1"`). They throw a clear error when the extension is missing or its version is outside that range, and `composer.json` suggests `ext-rusty_sheet`.
 - `benchmarks/bench-reader.php` and `benchmarks/bench-writer.php`: time any reader or writer driver.
 - Run the whole test suite against other drivers with `SHEET_STREAM_TEST_READER=rust` / `SHEET_STREAM_TEST_WRITER=rust`.
+
+### Changed
+
+- CI no longer runs a Laravel 11 job. An advisory fixed only in Laravel 12.71.0 and 13.40.0 (CVE-2026-128083) blocks every 11.x release. `composer.json` still allows `^11.0`, but it is untested.
 
 ---
 
