@@ -24,7 +24,9 @@ use MrDellimore\SheetStream\Jobs\QueuedExportJob;
 use MrDellimore\SheetStream\Jobs\QueuedImportJob;
 use MrDellimore\SheetStream\Jobs\StagingProducerJob;
 use MrDellimore\SheetStream\Support\CellNormalizer;
+use MrDellimore\SheetStream\Support\CollectionRows;
 use MrDellimore\SheetStream\Support\EventBus;
+use MrDellimore\SheetStream\Support\RowHelper;
 use MrDellimore\SheetStream\Support\TempFileResolver;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -62,6 +64,8 @@ class SheetStreamManager
             $runner = new ImportRunner(
                 (int) ($this->app['config']['sheet-stream.batch_size'] ?? 1000),
                 $this->headingFormatter(),
+                collectionRows: $this->collectionRows(),
+                blankCellsAsNull: $this->blankCellsAsNull(),
             );
             $runner->run($import, $reader, $bus);
         } catch (\Throwable $e) {
@@ -179,6 +183,8 @@ class SheetStreamManager
                 chunkSize: (int) ($this->app['config']['sheet-stream.chunk_size'] ?? 1000),
                 insertBatchSize: (int) ($this->app['config']['sheet-stream.staging.insert_batch_size'] ?? 500),
                 headingFormatter: $this->headingFormatter(),
+                collectionRows: $this->collectionRows(),
+                blankCellsAsNull: $this->blankCellsAsNull(),
             ));
         }
 
@@ -189,6 +195,8 @@ class SheetStreamManager
             readerOptions: $this->readerOptions($import),
             batchSize: (int) ($this->app['config']['sheet-stream.batch_size'] ?? 1000),
             headingFormatter: $this->headingFormatter(),
+            collectionRows: $this->collectionRows(),
+            blankCellsAsNull: $this->blankCellsAsNull(),
         ));
     }
 
@@ -314,6 +322,19 @@ class SheetStreamManager
     private function headingFormatter(): string
     {
         return (string) ($this->app['config']['sheet-stream.heading_formatter'] ?? 'slug');
+    }
+
+    /** What each row handed to ToCollection::collection() is: 'collection' or 'array'. */
+    private function collectionRows(): string
+    {
+        return CollectionRows::assertValid(
+            (string) ($this->app['config']['sheet-stream.collection_rows'] ?? CollectionRows::AS_COLLECTION)
+        );
+    }
+
+    private function blankCellsAsNull(): bool
+    {
+        return RowHelper::blankCellsAsNull($this->app['config']['sheet-stream.blank_cells'] ?? null);
     }
 
     private function tempPath(): string

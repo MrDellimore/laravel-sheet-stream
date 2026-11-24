@@ -57,12 +57,23 @@ it('throws when import has multiple output concerns', function () {
     }
 })->throws(InvalidConcernCombination::class, 'only one of: OnEachRow, ToModel, ToArray, or ToCollection');
 
-it('throws when SkipsOnFailure is used without WithValidation', function () {
+it('allows SkipsOnFailure without WithValidation', function () {
+    // Laravel Excel imports often declare SkipsOnFailure with no rules(); it just never fires.
     $import = new class implements SkipsOnFailure, ToArray
     {
-        public function array(array $array): void {}
+        public array $rows = [];
 
-        public function onFailure(Collection $failures): void {}
+        public bool $onFailureCalled = false;
+
+        public function array(array $array): void
+        {
+            $this->rows = $array;
+        }
+
+        public function onFailure(Collection $failures): void
+        {
+            $this->onFailureCalled = true;
+        }
     };
 
     $fixture = (new XlsxFixtureBuilder)->write([
@@ -78,7 +89,10 @@ it('throws when SkipsOnFailure is used without WithValidation', function () {
     } finally {
         $reader->close();
     }
-})->throws(InvalidConcernCombination::class, 'SkipsOnFailure requires WithValidation');
+
+    expect($import->rows)->toBe([['Name'], ['Alice']])
+        ->and($import->onFailureCalled)->toBeFalse();
+});
 
 it('throws when export has no data source concern', function () {
     $export = new class implements WithHeadings

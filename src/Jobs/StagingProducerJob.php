@@ -11,6 +11,7 @@ use Illuminate\Support\Str;
 use MrDellimore\SheetStream\Concerns\SkipsEmptyRows;
 use MrDellimore\SheetStream\Concerns\WithCsvPreConversion;
 use MrDellimore\SheetStream\Concerns\WithHeadingRow;
+use MrDellimore\SheetStream\Concerns\WithMultipleSheets;
 use MrDellimore\SheetStream\Concerns\WithReaderOptions;
 use MrDellimore\SheetStream\Concerns\WithRequiredHeadings;
 use MrDellimore\SheetStream\Engine\Contracts\SheetReader;
@@ -22,6 +23,7 @@ use MrDellimore\SheetStream\Events\BeforeSheet;
 use MrDellimore\SheetStream\Events\ImportFailed;
 use MrDellimore\SheetStream\Exceptions\MissingHeadingsException;
 use MrDellimore\SheetStream\Staging\StagingStore;
+use MrDellimore\SheetStream\Support\CollectionRows;
 use MrDellimore\SheetStream\Support\ConfiguresFromConcern;
 use MrDellimore\SheetStream\Support\ConversionResult;
 use MrDellimore\SheetStream\Support\CsvConverter;
@@ -38,6 +40,18 @@ class StagingProducerJob implements ShouldQueue
 
     public ?int $timeout = null;
 
+    /**
+     * What ToCollection rows are ('collection' or 'array'), passed on to each chunk job. Declared with a default, not
+     * promoted, so a job serialized before the setting existed still unserializes with one.
+     */
+    public string $collectionRows = CollectionRows::AS_COLLECTION;
+
+    /**
+     * null = decide from config when the job runs. Not a promoted property: it needs a real
+     * default so payloads queued before this property existed still unserialize.
+     */
+    public ?bool $blankCellsAsNull = null;
+
     public function __construct(
         public readonly object $import,
         public readonly string $filePath,
@@ -46,7 +60,11 @@ class StagingProducerJob implements ShouldQueue
         public readonly int $chunkSize = 1000,
         public readonly int $insertBatchSize = 500,
         public readonly string $headingFormatter = 'slug',
+        string $collectionRows = CollectionRows::AS_COLLECTION,
+        ?bool $blankCellsAsNull = null,
     ) {
+        $this->collectionRows = CollectionRows::assertValid($collectionRows);
+        $this->blankCellsAsNull = $blankCellsAsNull;
         $this->applyJobConfig($import);
     }
 
@@ -59,13 +77,16 @@ class StagingProducerJob implements ShouldQueue
         $bus = EventBus::for($this->import);
 
         try {
+            // Resolved once, so a sheet's events and its chunk jobs all get the same sub-import.
+            $sheets = $this->import instanceof WithMultipleSheets ? $this->import->sheets() : null;
+
             $bus?->dispatch(new BeforeImport($this->import));
 
             if ($this->shouldPreConvert($localPath)) {
                 $conversion = (CsvConverter::fromConfig())->convert($localPath);
-                $this->stageConvertedSheets($store, $importId, $conversion, $bus);
+                $this->stageConvertedSheets($store, $importId, $conversion, $bus, $sheets);
             } else {
-                $this->stageFromReader($store, $importId, $localPath, $bus);
+                $this->stageFromReader($store, $importId, $localPath, $bus, $sheets);
             }
 
             $bus?->dispatch(new AfterImport($this->import));
@@ -94,7 +115,7 @@ class StagingProducerJob implements ShouldQueue
         return CsvConverter::fromConfig()->isAvailable();
     }
 
-    private function stageFromReader(StagingStore $store, string $importId, string $localPath, ?EventBus $bus): void
+    private function stageFromReader(StagingStore $store, string $importId, string $localPath, ?EventBus $bus, ?array $sheets): void
     {
         $driver = config('sheet-stream.default_reader', 'openspout');
         $nativeOptions = $this->import instanceof WithReaderOptions ? $this->import->readerOptions() : null;
@@ -103,25 +124,26 @@ class StagingProducerJob implements ShouldQueue
 
         try {
             foreach ($reader->sheets() as $sheetIndex => $sheetReader) {
-                $this->processSheet($store, $importId, $sheetIndex, $sheetReader->name(), $sheetReader, $bus);
+                $this->processSheet($store, $importId, $sheetIndex, $sheetReader->name(), $sheetReader, $bus, $sheets);
             }
         } finally {
             $reader->close();
         }
     }
 
-    private function stageConvertedSheets(StagingStore $store, string $importId, ConversionResult $conversion, ?EventBus $bus): void
+    private function stageConvertedSheets(StagingStore $store, string $importId, ConversionResult $conversion, ?EventBus $bus, ?array $sheets): void
     {
         foreach ($conversion->csvPaths as $sheetIndex => $csvPath) {
             $sheetName = $conversion->sheetNames[$sheetIndex] ?? "Sheet {$sheetIndex}";
 
-            $subImport = SheetResolver::resolve($this->import, $sheetIndex, $sheetName);
+            $subImport = SheetResolver::resolve($this->import, $sheetIndex, $sheetName, $sheets);
 
             if ($subImport === null) {
                 continue;
             }
 
-            $bus?->dispatch(new BeforeSheet($subImport, $sheetIndex, $sheetName));
+            $sheetBus = EventBus::forSheet($bus, $this->import, $subImport);
+            $sheetBus?->dispatch(new BeforeSheet($subImport, $sheetIndex, $sheetName));
 
             $reader = EngineFactory::reader('openspout', $this->readerOptions);
             $reader->open($csvPath);
@@ -137,6 +159,7 @@ class StagingProducerJob implements ShouldQueue
                             importId: $importId,
                             sheetIndex: $sheetIndex,
                             chunkNumber: $chunk,
+                            collectionRows: $this->collectionRows,
                         );
                     }
 
@@ -146,19 +169,21 @@ class StagingProducerJob implements ShouldQueue
                 $reader->close();
             }
 
-            $bus?->dispatch(new AfterSheet($subImport, $sheetIndex, $sheetName));
+            // Fires once the sheet is staged; its chunk jobs have not necessarily run yet.
+            $sheetBus?->dispatch(new AfterSheet($subImport, $sheetIndex, $sheetName));
         }
     }
 
-    private function processSheet(StagingStore $store, string $importId, int $sheetIndex, string $sheetName, SheetReader $sheetReader, ?EventBus $bus): void
+    private function processSheet(StagingStore $store, string $importId, int $sheetIndex, string $sheetName, SheetReader $sheetReader, ?EventBus $bus, ?array $sheets): void
     {
-        $subImport = SheetResolver::resolve($this->import, $sheetIndex, $sheetName);
+        $subImport = SheetResolver::resolve($this->import, $sheetIndex, $sheetName, $sheets);
 
         if ($subImport === null) {
             return;
         }
 
-        $bus?->dispatch(new BeforeSheet($subImport, $sheetIndex, $sheetName));
+        $sheetBus = EventBus::forSheet($bus, $this->import, $subImport);
+        $sheetBus?->dispatch(new BeforeSheet($subImport, $sheetIndex, $sheetName));
 
         $chunksDispatched = $this->stageSheet($store, $importId, $sheetIndex, $sheetName, $subImport, $sheetReader);
 
@@ -169,10 +194,12 @@ class StagingProducerJob implements ShouldQueue
                 importId: $importId,
                 sheetIndex: $sheetIndex,
                 chunkNumber: $chunk,
+                collectionRows: $this->collectionRows,
             );
         }
 
-        $bus?->dispatch(new AfterSheet($subImport, $sheetIndex, $sheetName));
+        // Fires once the sheet is staged; its chunk jobs have not necessarily run yet.
+        $sheetBus?->dispatch(new AfterSheet($subImport, $sheetIndex, $sheetName));
     }
 
     private function stageSheet(
@@ -185,6 +212,8 @@ class StagingProducerJob implements ShouldQueue
     ): int {
         $hasHeadingRow = $subImport instanceof WithHeadingRow;
         $skipsEmpty = $subImport instanceof SkipsEmptyRows;
+        $blankCellsAsNull = $this->blankCellsAsNull
+            ?? RowHelper::blankCellsAsNull(config('sheet-stream.blank_cells'));
         $now = now()->toDateTimeString();
 
         $headings = null;
@@ -216,6 +245,12 @@ class StagingProducerJob implements ShouldQueue
             }
 
             $rowNumber++;
+
+            // Blanks are normalized here, as the row is staged, so the stored row is exactly
+            // what the chunk job hands to the import and no chunk job needs the setting.
+            if ($blankCellsAsNull) {
+                $rawRow = RowHelper::blanksToNull($rawRow);
+            }
 
             $row = $headings !== null
                 ? RowHelper::keyRow($rawRow, $headings, $headingCount)
