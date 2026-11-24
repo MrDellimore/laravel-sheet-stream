@@ -11,5 +11,7 @@ class AfterChunk
         public readonly int $sheetIndex,
         public readonly int $chunkNumber,
         public readonly int $rowsInChunk,
+        /** Row number of the chunk's first row; null where it isn't known (the staging pipeline). */
+        public readonly ?int $startRow = null,
     ) {}
 }

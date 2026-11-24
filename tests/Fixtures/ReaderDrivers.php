@@ -19,11 +19,24 @@ final class ReaderDrivers
     /** @var list<string> */
     public const array ALL = ['openspout', 'phpspreadsheet', 'rust'];
 
-    public static function open(string $driver, string $path, ?object $nativeOptions = null): Reader
+    /** Make a driver the configured default, for code that builds its own reader (the manager, queued jobs). */
+    public static function configure(string $driver): void
+    {
+        self::skipIfUnavailable($driver);
+
+        config()->set('sheet-stream.default_reader', $driver);
+    }
+
+    public static function skipIfUnavailable(string $driver): void
     {
         if ($driver === 'rust' && ! RustReader::isAvailable()) {
             test()->markTestSkipped('The rusty_sheet extension is not loaded.');
         }
+    }
+
+    public static function open(string $driver, string $path, ?object $nativeOptions = null): Reader
+    {
+        self::skipIfUnavailable($driver);
 
         $reader = EngineFactory::reader($driver, [], $nativeOptions);
         $reader->open($path);

@@ -47,7 +47,7 @@ class LoggedMultiSheetImport implements WithEvents, WithMultipleSheets
         return [
             AfterChunk::class => function (AfterChunk $event): void {
                 $this->log[] = ['AfterChunk', $event->sheetIndex, $event->chunkNumber, $event->rowsInChunk];
-                $this->chunkStartRows[] = $event->startRow ?? null;
+                $this->chunkStartRows[] = $event->startRow;
             },
         ];
     }

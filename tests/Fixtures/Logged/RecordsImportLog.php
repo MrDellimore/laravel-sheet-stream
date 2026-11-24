@@ -68,7 +68,7 @@ trait RecordsImportLog
             },
             AfterChunk::class => function (AfterChunk $event): void {
                 $this->log[] = ['AfterChunk', $event->chunkNumber, $event->rowsInChunk, ...$this->afterChunkExtras()];
-                $this->chunkStartRows[] = $event->startRow ?? null;
+                $this->chunkStartRows[] = $event->startRow;
             },
             AfterSheet::class => function (AfterSheet $event): void {
                 $this->log[] = ['AfterSheet', $event->sheetIndex];
