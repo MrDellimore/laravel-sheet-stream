@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`rust` reader driver** (`'default_reader' => 'rust'`), backed by the `rusty_sheet` PHP extension. It is a streaming XLSX reader that read a real 86 MB, 396k-row workbook in 3.4 s, against about 25 minutes with the OpenSpout driver. It also reads `.csv`/`.tsv` (about 10× faster) and supports `WithFormatData`. `.ods` and non-UTF-8 CSV fall back to OpenSpout per file. It throws if the extension isn't loaded. See [configuration](docs/configuration.md#default_reader) for its small, deliberate differences from the OpenSpout driver.
+- **`rust` writer driver** (`'default_writer' => 'rust'`): writes the same XLSX and CSV files as the OpenSpout driver, about 7× faster for XLSX and about 3× faster for CSV, with flat memory. It supports Style objects, native rows and cells, and `WithSheetSetup` (column widths, frozen panes, gridlines). Cell borders, hyperlinks, comments, merged cells, data validation and a `WithSheetSetup` autofilter are written like OpenSpout writes them. `.ods` and other non-default `XlsxOptions` fall back to OpenSpout; images, rich text and hidden or outlined rows raise `UnsupportedByEngine`.
+- The `rust` drivers need `rusty_sheet` `^0.1` (`pie install "mrdellimore/rusty-sheet:^0.1"`). They throw a clear error when the extension is missing or its version is outside that range, and `composer.json` suggests `ext-rusty_sheet`.
+- `benchmarks/bench-reader.php` and `benchmarks/bench-writer.php`: time any reader or writer driver.
+- Run the whole test suite against other drivers with `SHEET_STREAM_TEST_READER=rust` / `SHEET_STREAM_TEST_WRITER=rust`.
+
 ---
 
 ## [1.1.0] — 2026-11-10

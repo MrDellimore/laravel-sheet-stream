@@ -1,7 +1,7 @@
 {
     "name": "mrdellimore/laravel-sheet-stream",
-    "description": "Streaming Excel imports & exports for Laravel, powered by OpenSpout.",
-    "keywords": ["laravel", "excel", "xlsx", "csv", "openspout", "streaming", "import", "export", "memory"],
+    "description": "Streaming Excel imports & exports for Laravel, powered by Rusty Sheet.",
+    "keywords": ["laravel", "excel", "xlsx", "csv", "openspout", "Rust", "streaming", "import", "export", "memory"],
     "license": "MIT",
     "authors": [
         { "name": "Andrew M. Dellimore", "email": "andrewdellimore@gmail.com" }
