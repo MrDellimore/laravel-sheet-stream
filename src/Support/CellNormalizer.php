@@ -15,8 +15,9 @@ use InvalidArgumentException;
  * Laravel Excel hands imports the raw Excel serial number for a date-styled
  * cell (a formatted string when the import uses WithFormatData), never a
  * DateTime object. OpenSpout, by contrast, materialises date-styled cells as
- * DateTimeImmutable (and time-only cells as DateInterval). This class closes
- * that gap so import code written against Laravel Excel keeps working.
+ * DateTimeImmutable (a time of day such as h:mm as that time on 1899-12-30) and
+ * elapsed-time cells such as [h]:mm:ss as DateInterval. This class closes that
+ * gap so import code written against Laravel Excel keeps working.
  */
 final class CellNormalizer
 {
@@ -24,14 +25,8 @@ final class CellNormalizer
 
     public const string DATES_AS_DATETIME = 'datetime';
 
-    /** Excel serial for 1970-01-01 in the 1900 date system. */
+    /** Days from 1899-12-30, the day the readers count serials from, to 1970-01-01. */
     private const int UNIX_EPOCH_SERIAL = 25569;
-
-    /**
-     * Excel treats 1900 as a leap year (Lotus 1-2-3 compatibility), so
-     * every serial before 1900-03-01 is one lower than the true day count.
-     */
-    private const int LEAP_BUG_CUTOFF_SERIAL = 61;
 
     public static function assertValidDateMode(string $mode): string
     {
@@ -66,8 +61,19 @@ final class CellNormalizer
     }
 
     /**
-     * Convert a date to its Excel serial number (1900 date system), using the
-     * date's own wall-clock fields so the configured timezone is respected.
+     * Convert a date a reader produced back to the Excel serial stored in the cell, using
+     * the date's own wall-clock fields so the configured timezone is respected.
+     *
+     * This is the exact inverse of how OpenSpout and rusty_sheet build the date: the serial
+     * is a plain day count from 1899-12-30, on both sides of Excel's fictitious 1900-02-29
+     * (serial 60), which neither reader models. So serial 1 arrives as 1899-12-31, a time
+     * of day such as 18:00 (0.75) as 1899-12-30 18:00, serial 60 as 1900-02-28, and each
+     * maps back to the number it came from. No leap-day correction belongs here: applying
+     * one would shift every serial below 61, time-only cells included, down a day.
+     *
+     * The other side of that coin: from 1900-03-01 on (serial 61) the result is also the
+     * serial Excel itself gives the calendar date, but a calendar date in January or
+     * February 1900 comes out one higher than Excel's (1900-01-01 is 2, where Excel says 1).
      *
      * Returns an int for dates with no time component, mirroring how
      * PhpSpreadsheet yields a whole-number serial for date-only cells.
@@ -75,10 +81,6 @@ final class CellNormalizer
     public static function dateToSerial(DateTimeInterface $date): int|float
     {
         $days = (int) floor(($date->getTimestamp() + $date->getOffset()) / 86400) + self::UNIX_EPOCH_SERIAL;
-
-        if ($days < self::LEAP_BUG_CUTOFF_SERIAL) {
-            $days--;
-        }
 
         $seconds = ((int) $date->format('G')) * 3600
             + ((int) $date->format('i')) * 60
