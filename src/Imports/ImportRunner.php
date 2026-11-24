@@ -12,11 +12,9 @@ use MrDellimore\SheetStream\Concerns\ToArray;
 use MrDellimore\SheetStream\Concerns\ToCollection;
 use MrDellimore\SheetStream\Concerns\ToModel;
 use MrDellimore\SheetStream\Concerns\WithBatchInserts;
-use MrDellimore\SheetStream\Concerns\WithChunkOffset;
 use MrDellimore\SheetStream\Concerns\WithHeadingRow;
 use MrDellimore\SheetStream\Concerns\WithMultipleSheets;
 use MrDellimore\SheetStream\Concerns\WithRequiredHeadings;
-use MrDellimore\SheetStream\Concerns\WithRowNumber;
 use MrDellimore\SheetStream\Concerns\WithValidation;
 use MrDellimore\SheetStream\Engine\Contracts\Reader;
 use MrDellimore\SheetStream\Engine\Contracts\SheetReader;
@@ -80,8 +78,10 @@ class ImportRunner
         $skipsEmpty = $import instanceof SkipsEmptyRows;
         $hasValidation = $import instanceof WithValidation;
         $skipsOnFailure = $import instanceof SkipsOnFailure;
-        $remembersRowNumber = $import instanceof WithRowNumber;
-        $remembersChunkOffset = $import instanceof WithChunkOffset;
+        // Laravel Excel parity: the RemembersRowNumber / RemembersChunkOffset traits work on their
+        // own, so the setters are detected by name; WithRowNumber / WithChunkOffset only document them.
+        $remembersRowNumber = method_exists($import, 'setRowNumber');
+        $remembersChunkOffset = method_exists($import, 'setChunkOffset');
 
         $batchSize = $import instanceof WithBatchInserts
             ? $import->batchSize()
@@ -230,12 +230,6 @@ class ImportRunner
         if ($outputCount > 1) {
             throw new InvalidConcernCombination(
                 'Import must implement only one of: OnEachRow, ToModel, ToArray, or ToCollection.'
-            );
-        }
-
-        if ($import instanceof SkipsOnFailure && ! $import instanceof WithValidation) {
-            throw new InvalidConcernCombination(
-                'SkipsOnFailure requires WithValidation to also be implemented.'
             );
         }
 

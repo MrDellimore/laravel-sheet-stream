@@ -216,6 +216,37 @@ class ClaimantsImport implements ToModel, WithHeadingRow, WithValidation, SkipsO
 
 > **This is an improvement over Laravel Excel**, which only returns the first validation failure. Sheet Stream collects them all, with row numbers so you can tell the user exactly where to look.
 
+`SkipsOnFailure` may be declared without `WithValidation` (many Laravel Excel imports do). Nothing validates, so `onFailure()` is simply never called.
+
+---
+
+## Row numbers and chunk offsets
+
+### RemembersRowNumber
+
+Add the `RemembersRowNumber` trait to read the current row's 1-based spreadsheet row number (the heading row counts, so data starts at row 2) from `model()`, `onRow()` or a `WithValidation` callback:
+
+```php
+use MrDellimore\SheetStream\Concerns\RemembersRowNumber;
+
+class ClaimantsImport implements ToModel, WithHeadingRow
+{
+    use RemembersRowNumber;
+
+    public function model(array $row): ?Model
+    {
+        $rowNumber = $this->getRowNumber();
+        // ...
+    }
+}
+```
+
+### RemembersChunkOffset
+
+The `RemembersChunkOffset` trait exposes `getChunkOffset()`: the row number of the first row of the chunk being processed.
+
+Both traits work on their own, as in Laravel Excel: the importer looks for a `setRowNumber()` / `setChunkOffset()` method. The `WithRowNumber` and `WithChunkOffset` interfaces describe those methods and are optional; implement them if you write the setters yourself and want the contract checked.
+
 ---
 
 ## Dates and formatted values
