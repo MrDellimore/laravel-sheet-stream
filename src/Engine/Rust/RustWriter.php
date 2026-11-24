@@ -277,7 +277,7 @@ final class RustWriter implements ExposesNativeSheet, Writer, WritesNativeRows
     {
         return $extension === 'xlsx'
             && $nativeOptions instanceof XlsxOptions
-            && self::withoutCellRules($nativeOptions) != self::withoutCellRules(new XlsxOptions);
+            && $this->withoutCellRules($nativeOptions) != $this->withoutCellRules(new XlsxOptions);
     }
 
     /**
@@ -285,7 +285,7 @@ final class RustWriter implements ExposesNativeSheet, Writer, WritesNativeRows
      *
      * @return array<string, mixed>
      */
-    private static function withoutCellRules(XlsxOptions $options): array
+    private function withoutCellRules(XlsxOptions $options): array
     {
         return array_filter(
             (array) $options,
