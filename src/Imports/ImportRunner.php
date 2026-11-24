@@ -183,7 +183,7 @@ class ImportRunner
 
                     // The chunk boundary decides AfterChunk; batchSize still caps each save.
                     if ($chunked && count($chunk->models) >= $batchSize) {
-                        $this->saveModels($chunk);
+                        $this->saveModels($chunk, $import);
                     }
                 } elseif ($chunked) {
                     // Keyed so that getChunkOffset() + key is the row's number; rows that
@@ -242,17 +242,17 @@ class ImportRunner
             $chunk->release();
         }
 
-        $this->saveModels($chunk);
+        $this->saveModels($chunk, $import);
 
         $bus?->dispatch(new AfterChunk($import, $sheetIndex, $chunk->number, $chunk->rowCount, $chunk->startRow));
 
         $chunk->advance();
     }
 
-    private function saveModels(ChunkState $chunk): void
+    private function saveModels(ChunkState $chunk, object $import): void
     {
         if ($chunk->models !== []) {
-            RowHelper::flushModels($chunk->models);
+            RowHelper::flushModels($chunk->models, $import);
             $chunk->models = [];
         }
     }

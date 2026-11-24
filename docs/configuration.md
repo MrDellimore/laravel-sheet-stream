@@ -86,7 +86,7 @@ Cell borders, hyperlinks (with tooltips), comments, merged cells and data valida
 
 **Default:** `1000`
 
-The number of Eloquent models buffered before flushing to the database during `ToModel` imports. This is the default value — individual imports can override it by implementing `WithBatchInserts`:
+The number of Eloquent models buffered before flushing to the database during `ToModel` imports; each buffered model is written with `save()`. Individual imports can override the size by implementing `WithBatchInserts`, which also [switches the flush to one bulk `INSERT` per model class](imports.md#withbatchinserts):
 
 ```php
 use MrDellimore\SheetStream\Concerns\WithBatchInserts;

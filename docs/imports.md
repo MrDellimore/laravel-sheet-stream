@@ -22,7 +22,7 @@ For synchronous imports, `$filePath` should be an absolute path to an `.xlsx`, `
 
 ### ToModel
 
-Map each row to an Eloquent model. Models are saved row-by-row in a streaming fashion — this is the most memory-efficient import strategy.
+Map each row to an Eloquent model. Models are buffered and written in batches as the sheet streams — this is the most memory-efficient import strategy. Each model is written with `save()`, so model events, observers and auditing run; add [`WithBatchInserts`](#withbatchinserts) to write each batch with a single bulk `INSERT` instead.
 
 ```php
 use App\Models\Claimant;
@@ -132,7 +132,7 @@ To get the earlier behaviour back (the reader's own value: `''` for a blank insi
 
 ### WithBatchInserts
 
-Controls the buffer size for `ToModel` imports. Models are accumulated in a buffer and flushed (saved) when the buffer reaches the specified size.
+Sets the batch size for `ToModel` imports **and switches them to bulk inserts**, as in Laravel Excel: each batch is written with one query-builder `INSERT` per model class instead of one `save()` per model.
 
 ```php
 use MrDellimore\SheetStream\Concerns\WithBatchInserts;
@@ -148,7 +148,25 @@ class ClaimantsImport implements ToModel, WithHeadingRow, WithBatchInserts
 }
 ```
 
-If you don't implement `WithBatchInserts`, the default batch size from `config('sheet-stream.batch_size')` (default: 1000) is used.
+If you don't implement `WithBatchInserts`, models are buffered up to `config('sheet-stream.batch_size')` (default: 1000) and each one is written with `save()`.
+
+| | Without `WithBatchInserts` | With `WithBatchInserts` |
+|---|---|---|
+| Statements for N models | N (`save()` each) | one `INSERT` per model class per batch |
+| Model events, observers, auditing traits | fire | **do not fire** |
+| `created_at` / `updated_at` | set by `save()` | set the same way (skipped when `$timestamps = false`, kept when the model already has a value) |
+| Casts and mutators | applied | applied — the row is the model's stored attributes |
+| Model's key after the write | populated | not populated |
+
+What to know about the bulk path:
+
+- **No model events.** `creating`, `created`, `saving`, `saved`, observers and anything built on them (auditing, `$touches`, search indexing) are bypassed. If you need them, don't implement `WithBatchInserts`.
+- **Mixed model classes** in one batch get one `INSERT` each. Models are grouped by class, connection and table, so a model on another connection (class-level `$connection` or `setConnection()`) lands where `save()` would put it.
+- **Different attribute sets.** A multi-row `INSERT` takes its columns from the first row, so models of one class that set different attributes are written with one `INSERT` per distinct attribute set (columns you did not set keep their database default). Return the same keys from every `model()` call to get exactly one statement per batch.
+- **Existing models.** A model that already exists (e.g. from `firstOrNew()`) is updated with `save()` rather than inserted again.
+- **Failures throw.** A failing `INSERT` raises the database exception (and `ImportFailed`); a multi-row `INSERT` is atomic, so none of that statement's rows are written. Batches written earlier stay, as they do with `save()` — wrap the import in a transaction if you need all-or-nothing.
+- **Placeholder limits.** One statement binds `batchSize() × columns` values. Keep that under your database's limit (65,535 for MySQL and PostgreSQL, 2,100 for SQL Server).
+- A `batchSize()` of `1` keeps the `save()` path, as in Laravel Excel.
 
 ### SkipsEmptyRows
 
@@ -644,7 +662,7 @@ The `ImportRunner` processes each sheet in a streaming loop:
    - If `SkipsEmptyRows` and the row is empty: skip.
    - If headings exist: combine headings + row values into an associative array.
    - If `WithValidation`: validate the row. On failure, either throw or collect (if `SkipsOnFailure`).
-   - If `ToModel`: call `model()`, buffer the result, flush when batch size is reached.
+   - If `ToModel`: call `model()`, buffer the result, flush when batch size is reached (`save()` per model, or one bulk `INSERT` per model class with `WithBatchInserts`).
    - If `ToArray`/`ToCollection`: accumulate the row.
 5. Flush remaining buffered models.
 6. Deliver collected failures to `onFailure()` (if `SkipsOnFailure`).
