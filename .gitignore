@@ -12,3 +12,8 @@ phpstan.neon
 .DS_Store
 _reference-laravel-excel/
 benchmarks/fixture-*.xlsx
+
+# Spreadsheets dropped in the repository root (e.g. client files used for local benchmarks)
+/*.xlsx
+/*.xls
+/*.csv
