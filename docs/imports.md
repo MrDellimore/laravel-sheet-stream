@@ -537,6 +537,82 @@ Without `WithMultipleSheets`, only the first sheet is processed.
 
 ---
 
+## Events
+
+### WithEvents
+
+Implement `WithEvents` and return listeners keyed by event class from `registerEvents()`. The `RegistersEventListeners` trait builds that array for you from methods named after the events (`beforeImport()`, `afterSheet()`, `afterChunk()`, ...).
+
+```php
+use MrDellimore\SheetStream\Concerns\WithEvents;
+use MrDellimore\SheetStream\Events\AfterChunk;
+use MrDellimore\SheetStream\Events\AfterImport;
+
+class UsersImport implements ToModel, WithHeadingRow, WithEvents
+{
+    public function registerEvents(): array
+    {
+        return [
+            AfterChunk::class => fn (AfterChunk $event) => $this->progress->advance(),
+            AfterImport::class => fn (AfterImport $event) => $this->progress->finish(),
+        ];
+    }
+}
+```
+
+Every event has a scope:
+
+| Scope | Events | Delivered to |
+|---|---|---|
+| Import | `BeforeImport`, `AfterImport`, `ImportFailed` | The top-level import only |
+| Sheet | `BeforeSheet`, `AfterSheet`, `AfterChunk` | The sheet's own import, or the top-level import (see below) |
+
+`BeforeSheet` and `AfterSheet` carry `$event->sheet` (the import object handling the sheet), `$event->sheetIndex` and `$event->sheetName`. `AfterChunk` carries `$event->sheet`, `$event->sheetIndex`, `$event->chunkNumber` and `$event->rowsInChunk`.
+
+### Events in multi-sheet imports
+
+A sub-import returned from `sheets()` can implement `WithEvents` itself. Sheet-scoped events are then routed **per event class**:
+
+- If the sub-import registers a listener for the event class, **only the sub-import's listener** fires for that sheet.
+- Otherwise the **parent's** listener for that class fires, if it has one.
+
+Import-scoped events only ever go to the parent. A sub-import's listener for `BeforeImport`, `AfterImport` or `ImportFailed` is never called.
+
+```php
+class WorkbookImport implements WithMultipleSheets, WithEvents
+{
+    public function sheets(): array
+    {
+        return [
+            0 => new ClaimsSheetImport,  // registers AfterSheet
+            1 => new NotesSheetImport,   // no WithEvents
+        ];
+    }
+
+    public function registerEvents(): array
+    {
+        return [
+            BeforeImport::class => fn () => $this->start(),      // once, for the workbook
+            BeforeSheet::class => fn ($event) => $this->log($event->sheetName),  // both sheets: neither registers BeforeSheet
+            AfterSheet::class => fn ($event) => $this->done($event->sheetName),  // sheet 1 only: sheet 0 has its own
+        ];
+    }
+}
+```
+
+This is how Laravel Excel behaves for a sub-import that listens, so sheet classes written for it (each one advancing a progress bar in `AfterChunk`, or finishing its own work in `AfterSheet`) run once per event rather than once for the parent and again for the sheet. The fallback to the parent is an addition: sheets that have no listeners of their own can be observed from the parent.
+
+A sheet's listeners only ever see events of the sheets it is mapped to. Mapping one sub-import object to several sheets is fine: its listeners fire once for each of them.
+
+> **A parent cannot observe a sheet that listens for the same event.** Once a sub-import registers, say, `AfterSheet`, the parent's `AfterSheet` listener is not called for that sheet. If the parent needs to know, have the sub-import tell it (pass the parent into the sub-import's constructor), or do the workbook-level work in the parent's `AfterImport`.
+
+The same rule applies on every path: synchronous imports, `ShouldQueue`, `WithParallelSheets` and the [staging pipeline](staging-pipeline.md#events). Two path-specific details:
+
+- With `WithParallelSheets` each sheet runs in its own job and nothing spans the fan-out, so `BeforeImport` and `AfterImport` are not raised. `ImportFailed` is raised on the parent by the sheet job that failed.
+- In the staging pipeline `AfterSheet` fires when the sheet has been *staged*, before its chunks are processed. See [Staging Pipeline: Events](staging-pipeline.md#events).
+
+---
+
 ## How the import pipeline works
 
 The `ImportRunner` processes each sheet in a streaming loop:

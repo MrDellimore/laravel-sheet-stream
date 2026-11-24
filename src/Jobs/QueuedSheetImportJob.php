@@ -50,8 +50,8 @@ class QueuedSheetImportJob implements ShouldQueue
     public function handle(): void
     {
         $localPath = $this->resolveLocalPath('sheet_stream_sheet_');
-        $bus = EventBus::for($this->parentImport);
-        $bus?->merge($this->sheetImport);
+        $parentBus = EventBus::for($this->parentImport);
+        $bus = EventBus::forSheet($parentBus, $this->parentImport, $this->sheetImport);
 
         try {
             $driver = config('sheet-stream.default_reader', 'openspout');
@@ -75,7 +75,7 @@ class QueuedSheetImportJob implements ShouldQueue
                     }
                 }
             } catch (\Throwable $e) {
-                $bus?->dispatch(new ImportFailed($this->parentImport, $e));
+                $parentBus?->dispatch(new ImportFailed($this->parentImport, $e));
 
                 throw $e;
             } finally {

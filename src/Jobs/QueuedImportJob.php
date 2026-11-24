@@ -17,6 +17,7 @@ use MrDellimore\SheetStream\Support\CollectionRows;
 use MrDellimore\SheetStream\Support\ConfiguresFromConcern;
 use MrDellimore\SheetStream\Support\EventBus;
 use MrDellimore\SheetStream\Support\ResolvesTempFile;
+use MrDellimore\SheetStream\Support\SheetResolver;
 
 class QueuedImportJob implements ShouldQueue
 {
@@ -91,7 +92,7 @@ class QueuedImportJob implements ShouldQueue
                 $sheetMap = $this->import->sheets();
 
                 foreach ($reader->sheets() as $index => $sheetReader) {
-                    $subImport = $sheetMap[$index] ?? $sheetMap[$sheetReader->name()] ?? null;
+                    $subImport = SheetResolver::resolve($this->import, $index, $sheetReader->name(), $sheetMap);
 
                     if ($subImport !== null) {
                         QueuedSheetImportJob::dispatch(

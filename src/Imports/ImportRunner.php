@@ -69,9 +69,11 @@ class ImportRunner
 
             if ($subImport !== null) {
                 $sheetName = $sheetReader->name();
-                $bus?->dispatch(new BeforeSheet($subImport, $sheetIndex, $sheetName));
-                $this->processSheet($subImport, $sheetReader, $bus, $sheetIndex, $import);
-                $bus?->dispatch(new AfterSheet($subImport, $sheetIndex, $sheetName));
+                // Sheet events go to the sub-import's own listeners where it has them.
+                $sheetBus = EventBus::forSheet($bus, $import, $subImport);
+                $sheetBus?->dispatch(new BeforeSheet($subImport, $sheetIndex, $sheetName));
+                $this->processSheet($subImport, $sheetReader, $sheetBus, $sheetIndex, $import);
+                $sheetBus?->dispatch(new AfterSheet($subImport, $sheetIndex, $sheetName));
             }
         }
 

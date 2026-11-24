@@ -62,8 +62,8 @@ class StagingChunkProcessorJob implements ShouldQueue
             return;
         }
 
-        $bus = EventBus::for($this->import);
-        $bus?->merge($this->sheetImport);
+        $parentBus = EventBus::for($this->import);
+        $bus = EventBus::forSheet($parentBus, $this->import, $this->sheetImport);
 
         $isOnEachRow = $this->sheetImport instanceof OnEachRow;
         $isToModel = $this->sheetImport instanceof ToModel;
@@ -157,7 +157,7 @@ class StagingChunkProcessorJob implements ShouldQueue
                 $rows->count(),
             ));
         } catch (\Throwable $e) {
-            $bus?->dispatch(new ImportFailed($this->import, $e));
+            $parentBus?->dispatch(new ImportFailed($this->import, $e));
 
             throw $e;
         }
