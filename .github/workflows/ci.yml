@@ -52,7 +52,7 @@ jobs:
           # PIE must write to the system extension/ini dirs; it can't prompt for sudo in CI,
           # so run it as root (passwordless on GitHub runners) and pin the setup-php binary.
           sudo "$(command -v pie)" install "mrdellimore/rusty-sheet:^0.1" \
-            --with-php-path="$(command -v php)" --no-interaction
+            --with-php-config="$(command -v php-config)" --no-interaction
           php -r 'extension_loaded("rusty_sheet") || exit(1); echo "rusty_sheet ", phpversion("rusty_sheet"), PHP_EOL;'
 
       - name: Pin testbench to Laravel ${{ matrix.laravel }}
