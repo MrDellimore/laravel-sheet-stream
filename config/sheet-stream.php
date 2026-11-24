@@ -15,6 +15,11 @@ return [
     //   'slug' — Laravel Excel compatible (Str::slug with '_'): "Plan Type" => plan_type
     //   'none' — lowercase + trim only:                          "Plan Type" => "plan type"
     'heading_formatter' => 'slug',
+    // What each row of the Collection passed to ToCollection::collection() is.
+    //   'collection' — an Illuminate\Support\Collection, Laravel Excel compatible ($row->toArray(), $row->get('x'))
+    //   'array'      — a plain array (the behaviour of 1.2 and earlier); for code using is_array($row) or array_*($row)
+    // ToArray rows are always plain arrays.
+    'collection_rows' => 'collection',
     // How date-styled cells reach your import class.
     //   'serial'   — Excel serial number (int/float), Laravel Excel compatible. Convert with
     //                PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject() or your own

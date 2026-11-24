@@ -13,6 +13,7 @@ use MrDellimore\SheetStream\Concerns\WithReaderOptions;
 use MrDellimore\SheetStream\Engine\EngineFactory;
 use MrDellimore\SheetStream\Events\ImportFailed;
 use MrDellimore\SheetStream\Imports\ImportRunner;
+use MrDellimore\SheetStream\Support\CollectionRows;
 use MrDellimore\SheetStream\Support\ConfiguresFromConcern;
 use MrDellimore\SheetStream\Support\EventBus;
 use MrDellimore\SheetStream\Support\ResolvesTempFile;
@@ -25,6 +26,12 @@ class QueuedImportJob implements ShouldQueue
 
     public ?int $timeout = null;
 
+    /**
+     * What ToCollection rows are ('collection' or 'array'). Declared with a default, not
+     * promoted, so a job serialized before the setting existed still unserializes with one.
+     */
+    public string $collectionRows = CollectionRows::AS_COLLECTION;
+
     public function __construct(
         public object $import,
         public string $filePath,
@@ -32,7 +39,9 @@ class QueuedImportJob implements ShouldQueue
         public array $readerOptions = [],
         public int $batchSize = 1000,
         public string $headingFormatter = 'slug',
+        string $collectionRows = CollectionRows::AS_COLLECTION,
     ) {
+        $this->collectionRows = CollectionRows::assertValid($collectionRows);
         $this->applyJobConfig($import);
     }
 
@@ -54,7 +63,7 @@ class QueuedImportJob implements ShouldQueue
             $reader->open($localPath);
 
             try {
-                $runner = new ImportRunner($this->batchSize, $this->headingFormatter);
+                $runner = new ImportRunner($this->batchSize, $this->headingFormatter, collectionRows: $this->collectionRows);
                 $runner->run($this->import, $reader, $bus);
             } catch (\Throwable $e) {
                 $bus?->dispatch(new ImportFailed($this->import, $e));
@@ -94,6 +103,7 @@ class QueuedImportJob implements ShouldQueue
                             readerOptions: $this->readerOptions,
                             batchSize: $this->batchSize,
                             headingFormatter: $this->headingFormatter,
+                            collectionRows: $this->collectionRows,
                         );
                     }
                 }

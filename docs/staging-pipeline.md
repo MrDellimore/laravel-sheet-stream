@@ -274,7 +274,7 @@ The staging pipeline supports all standard import concerns:
 |---|---|---|
 | `ToModel` | Yes | Models are buffered and flushed per chunk |
 | `ToArray` | Yes | `array()` is called once **per chunk**, not once for the entire sheet |
-| `ToCollection` | Yes | `collection()` is called once **per chunk** |
+| `ToCollection` | Yes | `collection()` is called once **per chunk**. Each row is a `Collection`, or a plain array with `collection_rows => 'array'` |
 | `WithHeadingRow` | Yes | Headings extracted by the producer; rows arrive with keys applied |
 | `WithBatchInserts` | Yes | Controls model flush size within each chunk |
 | `SkipsEmptyRows` | Yes | Empty rows filtered by the producer before staging |

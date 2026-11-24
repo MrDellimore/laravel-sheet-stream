@@ -13,6 +13,7 @@ use MrDellimore\SheetStream\Events\AfterSheet;
 use MrDellimore\SheetStream\Events\BeforeSheet;
 use MrDellimore\SheetStream\Events\ImportFailed;
 use MrDellimore\SheetStream\Imports\ImportRunner;
+use MrDellimore\SheetStream\Support\CollectionRows;
 use MrDellimore\SheetStream\Support\ConfiguresFromConcern;
 use MrDellimore\SheetStream\Support\EventBus;
 use MrDellimore\SheetStream\Support\ResolvesTempFile;
@@ -25,6 +26,12 @@ class QueuedSheetImportJob implements ShouldQueue
 
     public ?int $timeout = null;
 
+    /**
+     * What ToCollection rows are ('collection' or 'array'). Declared with a default, not
+     * promoted, so a job serialized before the setting existed still unserializes with one.
+     */
+    public string $collectionRows = CollectionRows::AS_COLLECTION;
+
     public function __construct(
         public readonly object $parentImport,
         public readonly object $sheetImport,
@@ -34,7 +41,9 @@ class QueuedSheetImportJob implements ShouldQueue
         public readonly array $readerOptions = [],
         public readonly int $batchSize = 1000,
         public readonly string $headingFormatter = 'slug',
+        string $collectionRows = CollectionRows::AS_COLLECTION,
     ) {
+        $this->collectionRows = CollectionRows::assertValid($collectionRows);
         $this->applyJobConfig($sheetImport, $parentImport);
     }
 
@@ -54,7 +63,7 @@ class QueuedSheetImportJob implements ShouldQueue
             $reader->open($localPath);
 
             try {
-                $runner = new ImportRunner($this->batchSize, $this->headingFormatter);
+                $runner = new ImportRunner($this->batchSize, $this->headingFormatter, collectionRows: $this->collectionRows);
 
                 foreach ($reader->sheets() as $index => $sheetReader) {
                     if ($index === $this->sheetIndex) {
