@@ -15,6 +15,7 @@ return [
     'batch_size'     => 1000,
     'chunk_size'     => 1000,
     'temp_path'      => null,
+    'blank_cells'    => null,
     'dates' => [
         'import_as'       => 'serial',
         'timezone'        => null,
@@ -116,6 +117,27 @@ Directory for temporary files created during exports. Set this when the default 
 
 ```php
 'temp_path' => storage_path('app/temp'),
+```
+
+### `blank_cells`
+
+**Default:** `null`
+
+What a blank cell is when it reaches your import class.
+
+| Value | A blank cell arrives as | Notes |
+|---|---|---|
+| `null` | `null`, wherever it sits in the row | Laravel Excel compatible. |
+| `''` | whatever the reader yields | The behaviour before this option existed: the `openspout` and `rust` drivers yield `''` for a blank inside the row (and for any blank CSV field), the `phpspreadsheet` driver yields `null`; cells past the end of a short row are padded with `null`. |
+
+Only an exactly empty cell counts as blank. `0`, `'0'`, `false` and whitespace-only text are values and are never converted. A cell that explicitly stores an empty string is indistinguishable from a blank one in the streaming readers, so it becomes `null` too.
+
+The setting applies to every data row on every import path (`ToModel`, `ToCollection`, `ToArray`, `OnEachRow`, with or without `WithHeadingRow`, synchronous, queued and staged), before `WithValidation` runs. It matters for validation: Laravel skips non-implicit rules such as `integer` or `date` for `''` but applies them to `null`, so add `nullable` to rules for columns that may be blank, exactly as with Laravel Excel.
+
+Any other value (including the string `'null'`) throws an `InvalidArgumentException` when an import starts. Queued imports capture the setting when they are dispatched.
+
+```php
+'blank_cells' => '', // keep the pre-existing behaviour
 ```
 
 ### `dates.import_as`

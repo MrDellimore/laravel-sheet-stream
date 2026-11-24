@@ -107,6 +107,19 @@ Without `WithHeadingRow`, rows are delivered as numerically-indexed arrays.
 
 **Heading normalization:** headings are lowercased and trimmed. `" First Name "` becomes `"first name"`.
 
+### Blank cells
+
+A blank cell reaches your import as `null`, wherever it sits in the row and whichever driver read it — the same as Laravel Excel. That holds for every import concern, with or without `WithHeadingRow`, and for queued and staged imports.
+
+```php
+// Sheet row:  Alice | (blank) | 0 | (blank)
+['name' => 'Alice', 'email' => null, 'visits' => 0, 'phone' => null]
+```
+
+Only an exactly empty cell is blank: `0`, `'0'`, `false` and whitespace-only text arrive unchanged. The heading row is not affected.
+
+To get the earlier behaviour back (the reader's own value: `''` for a blank inside the row on the `openspout` and `rust` drivers, `null` only for cells past the end of a short row), set [`blank_cells`](configuration.md#blank_cells) to `''`.
+
 ### WithBatchInserts
 
 Controls the buffer size for `ToModel` imports. Models are accumulated in a buffer and flushed (saved) when the buffer reaches the specified size.
@@ -129,7 +142,7 @@ If you don't implement `WithBatchInserts`, the default batch size from `config('
 
 ### SkipsEmptyRows
 
-Skip rows where every cell is `null` or an empty string. This is a marker interface — just implement it, no methods required.
+Skip rows where every cell is blank (`null` or an empty string, whatever [`blank_cells`](configuration.md#blank_cells) is set to). A row holding only `0`, `false` or whitespace is not empty. This is a marker interface — just implement it, no methods required.
 
 ```php
 use MrDellimore\SheetStream\Concerns\SkipsEmptyRows;
@@ -169,6 +182,13 @@ class ClaimantsImport implements ToModel, WithHeadingRow, WithValidation
 ```
 
 The rule keys match the row keys — when using `WithHeadingRow`, these are the lowercased heading names. Without `WithHeadingRow`, use numeric indices (`'0'`, `'1'`, etc.).
+
+Rows are validated after blank cells have been turned into `null` (see [Blank cells](#blank-cells)). Laravel applies a rule like `integer` to `null` but skips it for `''`, so a column that may be blank needs `nullable`:
+
+```php
+'quantity' => ['nullable', 'integer'], // blank is fine, "abc" is not
+'name'     => ['required'],            // blank fails, as it always did
+```
 
 ### SkipsOnFailure
 
