@@ -46,6 +46,12 @@ class StagingProducerJob implements ShouldQueue
      */
     public string $collectionRows = CollectionRows::AS_COLLECTION;
 
+    /**
+     * null = decide from config when the job runs. Not a promoted property: it needs a real
+     * default so payloads queued before this property existed still unserialize.
+     */
+    public ?bool $blankCellsAsNull = null;
+
     public function __construct(
         public readonly object $import,
         public readonly string $filePath,
@@ -55,8 +61,10 @@ class StagingProducerJob implements ShouldQueue
         public readonly int $insertBatchSize = 500,
         public readonly string $headingFormatter = 'slug',
         string $collectionRows = CollectionRows::AS_COLLECTION,
+        ?bool $blankCellsAsNull = null,
     ) {
         $this->collectionRows = CollectionRows::assertValid($collectionRows);
+        $this->blankCellsAsNull = $blankCellsAsNull;
         $this->applyJobConfig($import);
     }
 
@@ -204,6 +212,8 @@ class StagingProducerJob implements ShouldQueue
     ): int {
         $hasHeadingRow = $subImport instanceof WithHeadingRow;
         $skipsEmpty = $subImport instanceof SkipsEmptyRows;
+        $blankCellsAsNull = $this->blankCellsAsNull
+            ?? RowHelper::blankCellsAsNull(config('sheet-stream.blank_cells'));
         $now = now()->toDateTimeString();
 
         $headings = null;
@@ -235,6 +245,12 @@ class StagingProducerJob implements ShouldQueue
             }
 
             $rowNumber++;
+
+            // Blanks are normalized here, as the row is staged, so the stored row is exactly
+            // what the chunk job hands to the import and no chunk job needs the setting.
+            if ($blankCellsAsNull) {
+                $rawRow = RowHelper::blanksToNull($rawRow);
+            }
 
             $row = $headings !== null
                 ? RowHelper::keyRow($rawRow, $headings, $headingCount)

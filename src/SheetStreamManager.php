@@ -25,6 +25,7 @@ use MrDellimore\SheetStream\Jobs\StagingProducerJob;
 use MrDellimore\SheetStream\Support\CellNormalizer;
 use MrDellimore\SheetStream\Support\CollectionRows;
 use MrDellimore\SheetStream\Support\EventBus;
+use MrDellimore\SheetStream\Support\RowHelper;
 use MrDellimore\SheetStream\Support\TempFileResolver;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -63,6 +64,7 @@ class SheetStreamManager
                 (int) ($this->app['config']['sheet-stream.batch_size'] ?? 1000),
                 $this->headingFormatter(),
                 collectionRows: $this->collectionRows(),
+                blankCellsAsNull: $this->blankCellsAsNull(),
             );
             $runner->run($import, $reader, $bus);
         } catch (\Throwable $e) {
@@ -155,6 +157,7 @@ class SheetStreamManager
                 insertBatchSize: (int) ($this->app['config']['sheet-stream.staging.insert_batch_size'] ?? 500),
                 headingFormatter: $this->headingFormatter(),
                 collectionRows: $this->collectionRows(),
+                blankCellsAsNull: $this->blankCellsAsNull(),
             ));
         }
 
@@ -166,6 +169,7 @@ class SheetStreamManager
             batchSize: (int) ($this->app['config']['sheet-stream.batch_size'] ?? 1000),
             headingFormatter: $this->headingFormatter(),
             collectionRows: $this->collectionRows(),
+            blankCellsAsNull: $this->blankCellsAsNull(),
         ));
     }
 
@@ -291,6 +295,11 @@ class SheetStreamManager
         return CollectionRows::assertValid(
             (string) ($this->app['config']['sheet-stream.collection_rows'] ?? CollectionRows::AS_COLLECTION)
         );
+    }
+
+    private function blankCellsAsNull(): bool
+    {
+        return RowHelper::blankCellsAsNull($this->app['config']['sheet-stream.blank_cells'] ?? null);
     }
 
     private function tempPath(): string

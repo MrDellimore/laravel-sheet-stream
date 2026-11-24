@@ -17,6 +17,7 @@ use MrDellimore\SheetStream\Support\CollectionRows;
 use MrDellimore\SheetStream\Support\ConfiguresFromConcern;
 use MrDellimore\SheetStream\Support\EventBus;
 use MrDellimore\SheetStream\Support\ResolvesTempFile;
+use MrDellimore\SheetStream\Support\RowHelper;
 
 class QueuedSheetImportJob implements ShouldQueue
 {
@@ -32,6 +33,12 @@ class QueuedSheetImportJob implements ShouldQueue
      */
     public string $collectionRows = CollectionRows::AS_COLLECTION;
 
+    /**
+     * null = decide from config when the job runs. Not a promoted property: it needs a real
+     * default so payloads queued before this property existed still unserialize.
+     */
+    public ?bool $blankCellsAsNull = null;
+
     public function __construct(
         public readonly object $parentImport,
         public readonly object $sheetImport,
@@ -42,8 +49,10 @@ class QueuedSheetImportJob implements ShouldQueue
         public readonly int $batchSize = 1000,
         public readonly string $headingFormatter = 'slug',
         string $collectionRows = CollectionRows::AS_COLLECTION,
+        ?bool $blankCellsAsNull = null,
     ) {
         $this->collectionRows = CollectionRows::assertValid($collectionRows);
+        $this->blankCellsAsNull = $blankCellsAsNull;
         $this->applyJobConfig($sheetImport, $parentImport);
     }
 
@@ -63,7 +72,7 @@ class QueuedSheetImportJob implements ShouldQueue
             $reader->open($localPath);
 
             try {
-                $runner = new ImportRunner($this->batchSize, $this->headingFormatter, collectionRows: $this->collectionRows);
+                $runner = new ImportRunner($this->batchSize, $this->headingFormatter, collectionRows: $this->collectionRows, blankCellsAsNull: $this->blankCellsAsNull());
 
                 foreach ($reader->sheets() as $index => $sheetReader) {
                     if ($index === $this->sheetIndex) {
@@ -84,5 +93,10 @@ class QueuedSheetImportJob implements ShouldQueue
         } finally {
             $this->cleanupTempFile($localPath);
         }
+    }
+
+    private function blankCellsAsNull(): bool
+    {
+        return $this->blankCellsAsNull ?? RowHelper::blankCellsAsNull(config('sheet-stream.blank_cells'));
     }
 }

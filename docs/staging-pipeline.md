@@ -84,7 +84,7 @@ SheetStream::import(new MyImport, 'file.xlsx')
 The `StagingProducerJob` is the only job that touches the original file. It:
 
 1. Opens the spreadsheet via the configured engine (OpenSpout or PhpSpreadsheet).
-2. Streams through each row, applying heading extraction and empty-row filtering.
+2. Streams through each row, applying heading extraction, empty-row filtering and [`blank_cells`](configuration.md#blank_cells) normalization, so the staged row is exactly what the import later receives.
 3. Pre-computes a **chunk number** for each row: `floor((rowNumber - 1) / chunkSize)`.
 4. Writes rows to the staging storage in batches (configurable via `staging.insert_batch_size`).
 5. After staging all rows, dispatches one `StagingChunkProcessorJob` per chunk.

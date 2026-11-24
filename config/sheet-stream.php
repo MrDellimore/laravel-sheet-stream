@@ -20,6 +20,12 @@ return [
     //   'array'      — a plain array (the behaviour of 1.2 and earlier); for code using is_array($row) or array_*($row)
     // ToArray rows are always plain arrays.
     'collection_rows' => 'collection',
+    // What a blank cell is when it reaches your import class.
+    //   null — Laravel Excel compatible: every blank cell is null, wherever it sits in the row.
+    //   ''   — leave what the reader yields: '' for a blank inside the row, null only for the
+    //          trailing cells a short row is padded with (the behaviour before this option).
+    // Only an exactly empty cell is blank; 0, '0', false and whitespace-only text are kept.
+    'blank_cells' => null,
     // How date-styled cells reach your import class.
     //   'serial'   — Excel serial number (int/float), Laravel Excel compatible. Convert with
     //                PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject() or your own

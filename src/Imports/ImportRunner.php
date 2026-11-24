@@ -38,6 +38,7 @@ class ImportRunner
         private readonly int $defaultBatchSize = 1000,
         private readonly string $headingFormatter = 'slug',
         private readonly string $collectionRows = CollectionRows::AS_COLLECTION,
+        private readonly bool $blankCellsAsNull = true,
     ) {
         CollectionRows::assertValid($collectionRows);
     }
@@ -134,6 +135,10 @@ class ImportRunner
 
             if ($skipsEmpty && RowHelper::isEmptyRow($rawRow)) {
                 continue;
+            }
+
+            if ($this->blankCellsAsNull) {
+                $rawRow = RowHelper::blanksToNull($rawRow);
             }
 
             $row = $headings !== null
