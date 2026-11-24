@@ -1,7 +1,9 @@
 <?php
 
 return [
-    'default_reader' => 'openspout',   // 'openspout' (streaming) or 'phpspreadsheet' (full-featured)
+    // 'openspout' (streaming), 'phpspreadsheet' (full-featured), or 'rust' (streaming, needs the
+    // rusty_sheet PHP extension; XLSX 25-175x faster, other formats fall back to OpenSpout)
+    'default_reader' => 'openspout',
     'default_writer' => 'openspout',   // 'openspout' (streaming) or 'phpspreadsheet' (.xls support)
     'batch_size' => 1000,              // rows per DB insert batch (ToModel imports)
     'chunk_size' => 1000,              // rows per queued chunk job

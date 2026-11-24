@@ -9,6 +9,7 @@ use MrDellimore\SheetStream\Engine\OpenSpout\OpenSpoutReader;
 use MrDellimore\SheetStream\Engine\OpenSpout\OpenSpoutWriter;
 use MrDellimore\SheetStream\Engine\PhpSpreadsheet\PhpSpreadsheetReader;
 use MrDellimore\SheetStream\Engine\PhpSpreadsheet\PhpSpreadsheetWriter;
+use MrDellimore\SheetStream\Engine\Rust\RustReader;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
 final class EngineFactory
@@ -18,8 +19,9 @@ final class EngineFactory
         return match ($driver) {
             'openspout' => new OpenSpoutReader($options, $nativeOptions),
             'phpspreadsheet' => self::requirePhpSpreadsheet($driver, fn () => new PhpSpreadsheetReader($options)),
+            'rust' => self::requireRustExtension(fn () => new RustReader($options, $nativeOptions)),
             default => throw new InvalidArgumentException(
-                "Unsupported reader driver: {$driver}. Supported drivers: openspout, phpspreadsheet."
+                "Unsupported reader driver: {$driver}. Supported drivers: openspout, phpspreadsheet, rust."
             ),
         };
     }
@@ -38,6 +40,27 @@ final class EngineFactory
                 "Unsupported writer driver: {$driver}. Supported drivers: openspout, phpspreadsheet."
             ),
         };
+    }
+
+    /**
+     * The 'rust' driver is explicit: when the extension is missing we fail loudly
+     * instead of silently running at OpenSpout speed.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $factory
+     * @return T
+     */
+    private static function requireRustExtension(callable $factory, string $kind = 'reader'): mixed
+    {
+        if (! RustReader::isAvailable()) {
+            throw new InvalidArgumentException(
+                "The 'rust' {$kind} driver requires the ".RustReader::EXTENSION.' PHP extension, which is not loaded. '
+                ."Install it, or set sheet-stream.default_{$kind} to 'openspout'."
+            );
+        }
+
+        return $factory();
     }
 
     /**

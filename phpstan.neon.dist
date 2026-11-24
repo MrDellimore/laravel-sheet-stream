@@ -7,3 +7,6 @@ parameters:
         - tests/Fixtures/RowNumberTrackingImport.php
         - tests/Fixtures/ChunkOffsetTrackingImport.php
     level: 5
+    # The rusty_sheet extension's API, for analysing the 'rust' driver without the extension loaded.
+    scanFiles:
+        - stubs/rusty_sheet.stub.php

@@ -2,6 +2,7 @@
     "preset": "laravel",
     "exclude": [
         "_reference-laravel-excel",
-        "benchmarks"
+        "benchmarks",
+        "stubs"
     ]
 }
