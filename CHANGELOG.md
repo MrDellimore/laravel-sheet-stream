@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.3.0] — 2026-11-24
+
 This release closes the gaps that kept Laravel Excel `ToCollection` importers from moving over unchanged. Several defaults change to match Laravel Excel; each has a config key or an opt-out where one makes sense. Read **Behaviour changes** before upgrading.
 
 ### Behaviour changes
