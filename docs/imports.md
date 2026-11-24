@@ -58,17 +58,27 @@ class ClaimantsImport implements ToCollection, WithHeadingRow
     public function collection(Collection $rows): void
     {
         foreach ($rows as $row) {
-            // $row is an associative array: ['name' => '...', 'email' => '...']
+            // $row is a Collection: $row['name'], $row->get('email'), $row->toArray()
         }
     }
 }
 ```
 
+**Each row is an `Illuminate\Support\Collection`**, as in Laravel Excel, keyed by heading with `WithHeadingRow` and by column position without it. `$row['name']`, `isset($row['name'])` and `foreach ($row as $heading => $value)` behave as they do on an array; `is_array($row)` is `false` and the `array_*()` functions need `$row->toArray()` (or `$row->all()`).
+
+Rows were plain arrays up to version 1.2. To keep that, set `collection_rows` to `'array'` in `config/sheet-stream.php`:
+
+```php
+'collection_rows' => 'array',
+```
+
+The setting applies wherever `collection()` is called: `SheetStream::import()`, queued imports, [`WithChunkReading`](#chunk-reading) and the [`UsesStagingTable`](#usesstagingtable-large-file-pipeline) pipeline. A queued import uses the value in effect when it was queued.
+
 > **Note:** `ToCollection` buffers all rows in memory. For large files, add [`WithChunkReading`](#chunk-reading) to receive the sheet a chunk at a time, or use `ToModel`, which streams row-by-row.
 
 ### ToArray
 
-Same as `ToCollection` but receives a plain PHP array. With [`WithChunkReading`](#chunk-reading) it is called once per chunk.
+Same as `ToCollection` but receives a plain PHP array of plain arrays, whatever `collection_rows` is set to. With [`WithChunkReading`](#chunk-reading) it is called once per chunk.
 
 ```php
 use MrDellimore\SheetStream\Concerns\ToArray;
@@ -237,7 +247,7 @@ public function collection(Collection $rows): void
 }
 ```
 
-Rows that failed validation or were skipped leave gaps in the keys rather than renumbering what follows. Use `$rows->values()` if you need a `0..n-1` list.
+Rows that failed validation or were skipped leave gaps in the keys rather than renumbering what follows. Use `$rows->values()` if you need a `0..n-1` list. The keys are the same whether the rows are Collections or arrays (`collection_rows`).
 
 ### Row numbers per driver
 
