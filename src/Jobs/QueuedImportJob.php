@@ -17,7 +17,6 @@ use MrDellimore\SheetStream\Support\CollectionRows;
 use MrDellimore\SheetStream\Support\ConfiguresFromConcern;
 use MrDellimore\SheetStream\Support\EventBus;
 use MrDellimore\SheetStream\Support\ResolvesTempFile;
-use MrDellimore\SheetStream\Support\RowHelper;
 use MrDellimore\SheetStream\Support\SheetResolver;
 
 class QueuedImportJob implements ShouldQueue
@@ -73,7 +72,7 @@ class QueuedImportJob implements ShouldQueue
             $reader->open($localPath);
 
             try {
-                $runner = new ImportRunner($this->batchSize, $this->headingFormatter, collectionRows: $this->collectionRows, blankCellsAsNull: $this->blankCellsAsNull());
+                $runner = new ImportRunner($this->batchSize, $this->headingFormatter, collectionRows: $this->collectionRows, blankCellsAsNull: $this->resolvedBlankCellsAsNull());
                 $runner->run($this->import, $reader, $bus);
             } catch (\Throwable $e) {
                 $bus?->dispatch(new ImportFailed($this->import, $e));
@@ -114,7 +113,7 @@ class QueuedImportJob implements ShouldQueue
                             batchSize: $this->batchSize,
                             headingFormatter: $this->headingFormatter,
                             collectionRows: $this->collectionRows,
-                            blankCellsAsNull: $this->blankCellsAsNull(),
+                            blankCellsAsNull: $this->resolvedBlankCellsAsNull(),
                         );
                     }
                 }
@@ -124,10 +123,5 @@ class QueuedImportJob implements ShouldQueue
         } finally {
             $this->cleanupTempFile($localPath);
         }
-    }
-
-    private function blankCellsAsNull(): bool
-    {
-        return $this->blankCellsAsNull ?? RowHelper::blankCellsAsNull(config('sheet-stream.blank_cells'));
     }
 }

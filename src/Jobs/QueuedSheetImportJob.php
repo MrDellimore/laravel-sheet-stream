@@ -17,7 +17,6 @@ use MrDellimore\SheetStream\Support\CollectionRows;
 use MrDellimore\SheetStream\Support\ConfiguresFromConcern;
 use MrDellimore\SheetStream\Support\EventBus;
 use MrDellimore\SheetStream\Support\ResolvesTempFile;
-use MrDellimore\SheetStream\Support\RowHelper;
 
 class QueuedSheetImportJob implements ShouldQueue
 {
@@ -72,7 +71,7 @@ class QueuedSheetImportJob implements ShouldQueue
             $reader->open($localPath);
 
             try {
-                $runner = new ImportRunner($this->batchSize, $this->headingFormatter, collectionRows: $this->collectionRows, blankCellsAsNull: $this->blankCellsAsNull());
+                $runner = new ImportRunner($this->batchSize, $this->headingFormatter, collectionRows: $this->collectionRows, blankCellsAsNull: $this->resolvedBlankCellsAsNull());
 
                 foreach ($reader->sheets() as $index => $sheetReader) {
                     if ($index === $this->sheetIndex) {
@@ -93,10 +92,5 @@ class QueuedSheetImportJob implements ShouldQueue
         } finally {
             $this->cleanupTempFile($localPath);
         }
-    }
-
-    private function blankCellsAsNull(): bool
-    {
-        return $this->blankCellsAsNull ?? RowHelper::blankCellsAsNull(config('sheet-stream.blank_cells'));
     }
 }

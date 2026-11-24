@@ -42,7 +42,7 @@ final readonly class RustSheetReader implements KeysRowsBySourceRow, ReadsFirstR
     {
         while (($batch = $this->reader->nextRows($this->index, $this->batchSize)) !== []) {
             foreach ($batch as $sourceRow => $row) {
-                yield $sourceRow => $this->convertDatesToSerial ? CellNormalizer::normalize($row) : $row;
+                yield $sourceRow => $this->convert($row);
             }
         }
     }
@@ -61,8 +61,15 @@ final readonly class RustSheetReader implements KeysRowsBySourceRow, ReadsFirstR
             return null;
         }
 
-        $row = reset($batch);
+        return $this->convert(reset($batch));
+    }
 
+    /**
+     * @param  array<int|string, scalar|null|DateTimeInterface>  $row
+     * @return array<int|string, scalar|null|DateTimeInterface>
+     */
+    private function convert(array $row): array
+    {
         return $this->convertDatesToSerial ? CellNormalizer::normalize($row) : $row;
     }
 }
