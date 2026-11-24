@@ -10,6 +10,7 @@ use MrDellimore\SheetStream\Engine\OpenSpout\OpenSpoutWriter;
 use MrDellimore\SheetStream\Engine\PhpSpreadsheet\PhpSpreadsheetReader;
 use MrDellimore\SheetStream\Engine\PhpSpreadsheet\PhpSpreadsheetWriter;
 use MrDellimore\SheetStream\Engine\Rust\RustReader;
+use MrDellimore\SheetStream\Engine\Rust\RustWriter;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
 final class EngineFactory
@@ -36,8 +37,14 @@ final class EngineFactory
                 dateTimeFormat: $options['dates']['datetime_format'] ?? 'yyyy-mm-dd hh:mm:ss',
             ),
             'phpspreadsheet' => self::requirePhpSpreadsheet($driver, fn () => new PhpSpreadsheetWriter($extension)),
+            'rust' => self::requireRustExtension(fn () => new RustWriter(
+                $extension,
+                $nativeOptions,
+                dateFormat: $options['dates']['format'] ?? 'yyyy-mm-dd',
+                dateTimeFormat: $options['dates']['datetime_format'] ?? 'yyyy-mm-dd hh:mm:ss',
+            ), 'writer'),
             default => throw new InvalidArgumentException(
-                "Unsupported writer driver: {$driver}. Supported drivers: openspout, phpspreadsheet."
+                "Unsupported writer driver: {$driver}. Supported drivers: openspout, phpspreadsheet, rust."
             ),
         };
     }

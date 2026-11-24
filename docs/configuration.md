@@ -68,11 +68,17 @@ You can mix drivers — use `phpspreadsheet` for reading and `openspout` for wri
 
 **Default:** `'openspout'`
 
-The engine driver used for writing spreadsheets. The same two drivers are available.
+The engine driver used for writing spreadsheets: `openspout`, `phpspreadsheet` or `rust`.
 
 **Use `'openspout'`** (default) for most exports — it streams rows directly to disk.
 
 **Use `'phpspreadsheet'`** when you need to write `.xls` format or need PhpSpreadsheet-specific features (cell-level styling, formula writing, etc.).
+
+**Use `'rust'`** for large `.xlsx` and `.csv` exports. It needs the `rusty_sheet` PHP extension, and writes the same files as the OpenSpout driver: the same styles, cell XML and CSV bytes. Writing 400k rows × 20 columns took 3.2 s for XLSX, against 21.7 s with OpenSpout; CSV took 1.6 s against 4.4 s. Your export classes don't change: styles are still OpenSpout `Style` objects, native rows are still OpenSpout `Row`/`Cell` objects, and `WithSheetSetup` still receives an OpenSpout `Sheet`, whose column widths, frozen panes and gridlines are applied.
+
+The XLSX output has two deliberate differences: there is no `<dimension>` element (optional, because rows are streamed straight into the file), and numbers are stored at full precision (OpenSpout keeps 14 significant digits).
+
+Cell borders, hyperlinks (with tooltips), comments, merged cells and data validation (from `XlsxOptions`) and a `WithSheetSetup` autofilter are written like OpenSpout writes them. `.ods` files and other non-default `XlsxOptions` are written by OpenSpout automatically. Features the rust writer can't express raise `UnsupportedByEngine` rather than being dropped: images, rich text, error cells, hidden or outlined rows, and `WithSheetSetup` settings other than column widths, frozen panes, gridlines and the autofilter.
 
 ### `batch_size`
 
