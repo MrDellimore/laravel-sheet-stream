@@ -14,6 +14,7 @@ use MrDellimore\SheetStream\Concerns\WithMultipleSheets;
 use MrDellimore\SheetStream\Concerns\WithReaderOptions;
 use MrDellimore\SheetStream\Concerns\WithWriterOptions;
 use MrDellimore\SheetStream\Engine\EngineFactory;
+use MrDellimore\SheetStream\Engine\Rust\RustReader;
 use MrDellimore\SheetStream\Events\AfterWriting;
 use MrDellimore\SheetStream\Events\ImportFailed;
 use MrDellimore\SheetStream\Exceptions\UnsupportedByEngine;
@@ -289,6 +290,9 @@ class SheetStreamManager
             ],
             'calculateFormulas' => $import instanceof WithCalculatedFormulas,
             'formatData' => $import instanceof WithFormatData,
+            'formulasWithoutCachedValue' => RustReader::assertValidFormulaCacheMode(
+                (string) ($this->app['config']['sheet-stream.formulas_without_cached_value'] ?? RustReader::FORMULA_CACHE_NULL)
+            ),
         ];
     }
 
