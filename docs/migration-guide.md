@@ -18,15 +18,19 @@ Sheet Stream uses the **same concern names** as Laravel Excel. Migrating an impo
 | Laravel Excel | Sheet Stream | Change required |
 |---|---|---|
 | `Maatwebsite\Excel\Concerns\ToModel` | `MrDellimore\SheetStream\Concerns\ToModel` | Namespace only |
-| `Maatwebsite\Excel\Concerns\ToCollection` | `MrDellimore\SheetStream\Concerns\ToCollection` | Namespace only |
+| `Maatwebsite\Excel\Concerns\ToCollection` | `MrDellimore\SheetStream\Concerns\ToCollection` | Namespace only (rows are Collections, as in Laravel Excel) |
 | `Maatwebsite\Excel\Concerns\ToArray` | `MrDellimore\SheetStream\Concerns\ToArray` | Namespace only |
 | `Maatwebsite\Excel\Concerns\WithHeadingRow` | `MrDellimore\SheetStream\Concerns\WithHeadingRow` | Namespace only |
-| `Maatwebsite\Excel\Concerns\WithBatchInserts` | `MrDellimore\SheetStream\Concerns\WithBatchInserts` | Namespace only |
+| `Maatwebsite\Excel\Concerns\WithBatchInserts` | `MrDellimore\SheetStream\Concerns\WithBatchInserts` | Namespace only (bulk inserts, as in Laravel Excel) |
 | `Maatwebsite\Excel\Concerns\SkipsEmptyRows` | `MrDellimore\SheetStream\Concerns\SkipsEmptyRows` | Namespace only |
 | `Maatwebsite\Excel\Concerns\WithValidation` | `MrDellimore\SheetStream\Concerns\WithValidation` | Namespace only |
 | `Maatwebsite\Excel\Concerns\SkipsOnFailure` | `MrDellimore\SheetStream\Concerns\SkipsOnFailure` | Signature differs (see below) |
 | `Maatwebsite\Excel\Concerns\WithMultipleSheets` | `MrDellimore\SheetStream\Concerns\WithMultipleSheets` | Namespace only |
-| `Maatwebsite\Excel\Concerns\WithChunkReading` | *(not needed)* | Remove — streaming is built-in |
+| `Maatwebsite\Excel\Concerns\WithChunkReading` | `MrDellimore\SheetStream\Concerns\WithChunkReading` | Namespace only (see below) |
+| `Maatwebsite\Excel\Concerns\WithEvents` | `MrDellimore\SheetStream\Concerns\WithEvents` | Namespace only, events included (see below) |
+| `Maatwebsite\Excel\Concerns\RemembersChunkOffset` / `RemembersRowNumber` | `MrDellimore\SheetStream\Concerns\RemembersChunkOffset` / `RemembersRowNumber` | Namespace only |
+| `Maatwebsite\Excel\Concerns\SkipsUnknownSheets` | *(not needed)* | Remove — unmapped sheets are skipped |
+| `Maatwebsite\Excel\Concerns\WithUpserts` | *(not supported)* | — |
 | `Maatwebsite\Excel\Concerns\WithFormatData` | `MrDellimore\SheetStream\Concerns\WithFormatData` | Namespace only (see dates note below) |
 | `Maatwebsite\Excel\Concerns\WithCalculatedFormulas` | `MrDellimore\SheetStream\Concerns\WithCalculatedFormulas` | Namespace only |
 | `Maatwebsite\Excel\Concerns\WithCustomCsvSettings` | `MrDellimore\SheetStream\Concerns\WithReaderOptions` | Different API (see below) |
@@ -57,7 +61,7 @@ Laravel Excel hands your import the raw **Excel serial number** for a date-style
 
 **Laravel Excel** calls `onFailure()` with a variadic array of `Maatwebsite\Excel\Validators\Failure` objects.
 
-**Sheet Stream** calls `onFailure()` once after all rows are processed, with a `Collection<int, Failure>` where each `Failure` carries the row number, errors, and original values:
+**Sheet Stream** calls `onFailure()` once per chunk with `WithChunkReading` (otherwise once after the sheet), with a `Collection<int, Failure>` where each `Failure` carries the row number, errors, and original values:
 
 ```php
 // Laravel Excel
@@ -87,30 +91,41 @@ public function onFailure(Collection $failures): void
 ```
 
 Key differences:
-- Sheet Stream collects **all** failures and delivers them in one call (not incrementally).
+- Sheet Stream delivers a chunk's failures in one call (the whole sheet's without `WithChunkReading`).
+- `SkipsOnFailure` may be declared without `WithValidation`; it then never fires.
 - Each `Failure` contains **all** validation errors for the row (not one attribute at a time).
 - `values()` gives you the full row data that failed, making it easy to report back to the user.
 
-### WithChunkReading — just remove it
+### WithChunkReading — keep it
 
-Sheet Stream streams every import by default. There is no `WithChunkReading` concern because chunking is always on. Simply remove the interface and the `chunkSize()` method.
+Keep the interface and your `chunkSize()`; only the namespace changes. It means what it does in Laravel Excel: `collection()` / `array()` are called once per chunk, `onFailure()` runs per chunk before them, and `AfterChunk` fires after each chunk's work. On a `WithMultipleSheets` import a `chunkSize()` on the parent applies to every sheet that does not declare its own.
 
-```diff
-- use Maatwebsite\Excel\Concerns\WithChunkReading;
-  use MrDellimore\SheetStream\Concerns\ToModel;
-  use MrDellimore\SheetStream\Concerns\WithHeadingRow;
+Two differences, both in your favour:
 
-- class UsersImport implements ToModel, WithHeadingRow, WithChunkReading
-+ class UsersImport implements ToModel, WithHeadingRow
-  {
-      public function model(array $row): ?Model { /* ... */ }
--
--     public function chunkSize(): int
--     {
--         return 1000;
--     }
-  }
-```
+- The file is read **once**. Laravel Excel re-opens the whole workbook for every chunk.
+- A chunk is `chunkSize()` consecutive **data rows** (after `SkipsEmptyRows`, before validation), not a window of physical rows. `ceil(dataRows / chunkSize())` is therefore the exact number of `AfterChunk` events, which is what a progress bar needs; `SheetStream::countRows()` returns that row count.
+
+Without `WithChunkReading`, `collection()` / `array()` are called once with the whole sheet, which is right for small synchronous imports and wrong for large ones.
+
+`WithBatchInserts` keeps its Laravel Excel meaning too: the `ToModel` insert size. With both concerns, models are inserted every `batchSize()` and `AfterChunk` fires every `chunkSize()`.
+
+### ToCollection rows, blank cells and row numbers
+
+- Each row handed to `collection()` is a `Collection`, so `$row->toArray()` keeps working. (`collection_rows => 'array'` gives plain arrays.)
+- A blank cell is `null`, wherever it is in the row. A cell holding an explicit empty string is `null` as well, where Laravel Excel gives `''`.
+- In a chunk, `getChunkOffset() + $key` is the row's number in the file, and keys have gaps where rows failed validation or were skipped, as in Laravel Excel. On the `rust` and `phpspreadsheet` readers that number is exact; the `openspout` reader counts the rows it yields, so rows below a blank line are numbered low.
+
+### WithBatchInserts — bulk inserts, no model events
+
+As in Laravel Excel, a `ToModel` import with `WithBatchInserts` writes one `INSERT` per model class per batch. Model events, observers and auditing do not fire for those rows. Drop the concern from an import whose models rely on them.
+
+### Events on multi-sheet imports
+
+A sub-import's own `BeforeSheet`, `AfterSheet` and `AfterChunk` listeners fire for its sheet, and a parent's listener for the same event does not fire for a sheet that registers one — the same as Laravel Excel. Unlike Laravel Excel, a sheet that registers no listener for an event falls back to the parent's. `BeforeImport`, `AfterImport` and `ImportFailed` go to the top-level import only.
+
+### Formulas
+
+`WithCalculatedFormulas` returns the value the file cached when it was last saved; nothing is evaluated (use the `phpspreadsheet` reader for that). A formula with no cached value is `null`. On the `rust` reader, `formulas_without_cached_value => 'throw'` turns that into an error naming the cell.
 
 ### WithStyles → WithHeadingStyle / WithDefaultRowStyle / WithColumnStyles
 
@@ -239,7 +254,6 @@ These Laravel Excel features are **not available** in Sheet Stream. If your impo
 | `WithColumnWidths` / auto-sizing | Not supported | Use `WithWriterOptions` with XLSX Options for column widths |
 | `WithDrawings` / `WithCharts` | Not supported (engine limit) | — |
 | Formula recalculation | Cached values only | — |
-| `RemembersRowNumber` | Not supported | — |
 
 ## Step-by-step example
 
@@ -301,10 +315,11 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use MrDellimore\SheetStream\Concerns\ToModel;
 use MrDellimore\SheetStream\Concerns\WithBatchInserts;
+use MrDellimore\SheetStream\Concerns\WithChunkReading;
 use MrDellimore\SheetStream\Concerns\WithHeadingRow;
 use MrDellimore\SheetStream\Concerns\WithValidation;
 
-class UsersImport implements ToModel, WithHeadingRow, WithBatchInserts, WithValidation
+class UsersImport implements ToModel, WithHeadingRow, WithBatchInserts, WithChunkReading, WithValidation
 {
     public function model(array $row): ?Model
     {
@@ -319,7 +334,10 @@ class UsersImport implements ToModel, WithHeadingRow, WithBatchInserts, WithVali
         return 500;
     }
 
-    // chunkSize() removed — streaming is automatic
+    public function chunkSize(): int
+    {
+        return 1000;
+    }
 
     public function rules(): array
     {
@@ -332,7 +350,5 @@ class UsersImport implements ToModel, WithHeadingRow, WithBatchInserts, WithVali
 ```
 
 Changes:
-1. Swapped four `use` statements from `Maatwebsite\Excel\Concerns\*` to `MrDellimore\SheetStream\Concerns\*`
-2. Removed `WithChunkReading` from the `implements` clause
-3. Deleted `chunkSize()` method
-4. Everything else is identical
+1. Swapped five `use` statements from `Maatwebsite\Excel\Concerns\*` to `MrDellimore\SheetStream\Concerns\*`
+2. Everything else is identical

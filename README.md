@@ -194,13 +194,14 @@ class ClaimantsExport implements FromQuery, WithHeadings, WithMapping
 
 | Concern | Description |
 |---|---|
-| `ToModel` | Map each row to an Eloquent model; saves row-by-row (streaming) |
-| `ToCollection` | Receive all rows as a `Collection` (buffered) |
-| `ToArray` | Receive all rows as a plain `array` (buffered) |
+| `ToModel` | Map each row to an Eloquent model; saved per model, or bulk-inserted with `WithBatchInserts` |
+| `ToCollection` | Receive rows as a `Collection` of `Collection`s: the whole sheet, or a chunk at a time with `WithChunkReading` |
+| `ToArray` | Receive rows as a plain `array`: the whole sheet, or a chunk at a time with `WithChunkReading` |
 | `WithHeadingRow` | Use the first row as associative keys (lowercased) |
-| `WithBatchInserts` | Control the flush buffer size for `ToModel` |
+| `WithBatchInserts` | Bulk-insert `ToModel` results, one `INSERT` per model class per batch (no model events) |
+| `WithChunkReading` | Deliver rows, failures and `AfterChunk` one chunk at a time, keeping memory flat |
 | `WithValidation` | Validate each row with Laravel validation rules |
-| `SkipsOnFailure` | Skip invalid rows; receive **all** failures (with row numbers) at once after processing |
+| `SkipsOnFailure` | Skip invalid rows; receive the failures (with row numbers) per chunk, or once per sheet without `WithChunkReading` |
 | `SkipsEmptyRows` | Skip rows where every cell is null or empty string |
 | `WithMultipleSheets` | Route each sheet to a different import object |
 | `WithFormatData` | Receive cells as display strings rendered through their number format (dates as `"09/16/2026"`, not serials) |
