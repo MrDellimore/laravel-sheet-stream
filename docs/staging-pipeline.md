@@ -99,7 +99,7 @@ Each `StagingChunkProcessorJob` is an independent, parallelisable unit of work:
 2. For each row, runs the import logic:
    - **WithValidation**: validates against the declared rules.
    - **SkipsOnFailure**: collects failures instead of throwing.
-   - **ToModel**: calls `model()`, buffers and flushes in batches.
+   - **ToModel**: calls `model()`, buffers and flushes in batches (`save()` per model, or one bulk `INSERT` per model class with `WithBatchInserts`).
    - **ToArray / ToCollection**: accumulates rows, delivers once per chunk.
 3. Marks rows as processed (database driver) or cleans up the chunk file (file driver).
 
@@ -276,7 +276,7 @@ The staging pipeline supports all standard import concerns:
 | `ToArray` | Yes | `array()` is called once **per chunk**, not once for the entire sheet |
 | `ToCollection` | Yes | `collection()` is called once **per chunk** |
 | `WithHeadingRow` | Yes | Headings extracted by the producer; rows arrive with keys applied |
-| `WithBatchInserts` | Yes | Controls model flush size within each chunk |
+| `WithBatchInserts` | Yes | Controls model flush size within each chunk and makes each flush a bulk `INSERT` per model class ([no model events](imports.md#withbatchinserts)) |
 | `SkipsEmptyRows` | Yes | Empty rows filtered by the producer before staging |
 | `WithValidation` | Yes | Validation runs in the consumer per row |
 | `SkipsOnFailure` | Yes | Failures collected per chunk, delivered via `onFailure()` |
