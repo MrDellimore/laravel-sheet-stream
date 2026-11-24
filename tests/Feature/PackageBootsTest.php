@@ -11,6 +11,7 @@ it('boots the service provider and resolves the facade', function () {
 });
 
 it('loads the default config values', function () {
-    expect(config('sheet-stream.default_reader'))->toBe('openspout')
+    // SHEET_STREAM_TEST_READER (see TestCase) swaps the reader for whole-suite runs.
+    expect(config('sheet-stream.default_reader'))->toBe(getenv('SHEET_STREAM_TEST_READER') ?: 'openspout')
         ->and(config('sheet-stream.batch_size'))->toBe(1000);
 });

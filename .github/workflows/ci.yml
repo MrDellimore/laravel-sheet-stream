@@ -42,7 +42,15 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           extensions: zip, xmlreader
+          tools: pie
           coverage: none
+
+      # The prebuilt rusty_sheet binary from its GitHub release, for the 'rust' drivers.
+      # Fails the job if it doesn't load, so the rust tests can't silently skip.
+      - name: Install the rusty_sheet extension
+        run: |
+          pie install "mrdellimore/rusty-sheet:^0.1" --no-interaction
+          php -r 'extension_loaded("rusty_sheet") || exit(1); echo "rusty_sheet ", phpversion("rusty_sheet"), PHP_EOL;'
 
       - name: Pin testbench to Laravel ${{ matrix.laravel }}
         run: |
@@ -81,4 +89,10 @@ jobs:
         run: vendor/bin/rector --dry-run
 
       - name: Run tests (Pest)
+        run: vendor/bin/pest --no-coverage --exclude-group=benchmark
+
+      - name: Run tests on the rust drivers (Pest)
+        env:
+          SHEET_STREAM_TEST_READER: rust
+          SHEET_STREAM_TEST_WRITER: rust
         run: vendor/bin/pest --no-coverage --exclude-group=benchmark
