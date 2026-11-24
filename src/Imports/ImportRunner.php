@@ -27,6 +27,7 @@ use MrDellimore\SheetStream\Events\BeforeImport;
 use MrDellimore\SheetStream\Events\BeforeSheet;
 use MrDellimore\SheetStream\Exceptions\InvalidConcernCombination;
 use MrDellimore\SheetStream\Exceptions\MissingHeadingsException;
+use MrDellimore\SheetStream\Support\CollectionRows;
 use MrDellimore\SheetStream\Support\EventBus;
 use MrDellimore\SheetStream\Support\RowHelper;
 use MrDellimore\SheetStream\Support\SheetResolver;
@@ -36,7 +37,10 @@ class ImportRunner
     public function __construct(
         private readonly int $defaultBatchSize = 1000,
         private readonly string $headingFormatter = 'slug',
-    ) {}
+        private readonly string $collectionRows = CollectionRows::AS_COLLECTION,
+    ) {
+        CollectionRows::assertValid($collectionRows);
+    }
 
     /**
      * @param  object|null  $parentImport  the WithMultipleSheets import the sheet belongs to: a sheet
@@ -258,7 +262,7 @@ class ImportRunner
         if ($import instanceof ToArray) {
             $import->array($chunk->rows);
         } elseif ($import instanceof ToCollection) {
-            $import->collection(new Collection($chunk->rows));
+            $import->collection(CollectionRows::wrap($chunk->rows, $this->collectionRows));
         }
     }
 

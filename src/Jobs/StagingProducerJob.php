@@ -22,6 +22,7 @@ use MrDellimore\SheetStream\Events\BeforeSheet;
 use MrDellimore\SheetStream\Events\ImportFailed;
 use MrDellimore\SheetStream\Exceptions\MissingHeadingsException;
 use MrDellimore\SheetStream\Staging\StagingStore;
+use MrDellimore\SheetStream\Support\CollectionRows;
 use MrDellimore\SheetStream\Support\ConfiguresFromConcern;
 use MrDellimore\SheetStream\Support\ConversionResult;
 use MrDellimore\SheetStream\Support\CsvConverter;
@@ -38,6 +39,12 @@ class StagingProducerJob implements ShouldQueue
 
     public ?int $timeout = null;
 
+    /**
+     * What ToCollection rows are ('collection' or 'array'), passed on to each chunk job. Declared with a default, not
+     * promoted, so a job serialized before the setting existed still unserializes with one.
+     */
+    public string $collectionRows = CollectionRows::AS_COLLECTION;
+
     public function __construct(
         public readonly object $import,
         public readonly string $filePath,
@@ -46,7 +53,9 @@ class StagingProducerJob implements ShouldQueue
         public readonly int $chunkSize = 1000,
         public readonly int $insertBatchSize = 500,
         public readonly string $headingFormatter = 'slug',
+        string $collectionRows = CollectionRows::AS_COLLECTION,
     ) {
+        $this->collectionRows = CollectionRows::assertValid($collectionRows);
         $this->applyJobConfig($import);
     }
 
@@ -137,6 +146,7 @@ class StagingProducerJob implements ShouldQueue
                             importId: $importId,
                             sheetIndex: $sheetIndex,
                             chunkNumber: $chunk,
+                            collectionRows: $this->collectionRows,
                         );
                     }
 
@@ -169,6 +179,7 @@ class StagingProducerJob implements ShouldQueue
                 importId: $importId,
                 sheetIndex: $sheetIndex,
                 chunkNumber: $chunk,
+                collectionRows: $this->collectionRows,
             );
         }
 

@@ -21,6 +21,7 @@ use MrDellimore\SheetStream\Events\AfterChunk;
 use MrDellimore\SheetStream\Events\ImportFailed;
 use MrDellimore\SheetStream\Imports\Failure;
 use MrDellimore\SheetStream\Staging\StagingStore;
+use MrDellimore\SheetStream\Support\CollectionRows;
 use MrDellimore\SheetStream\Support\ConfiguresFromConcern;
 use MrDellimore\SheetStream\Support\EventBus;
 use MrDellimore\SheetStream\Support\RowHelper;
@@ -33,13 +34,21 @@ class StagingChunkProcessorJob implements ShouldQueue
 
     public ?int $timeout = null;
 
+    /**
+     * What ToCollection rows are ('collection' or 'array'). Declared with a default, not
+     * promoted, so a job serialized before the setting existed still unserializes with one.
+     */
+    public string $collectionRows = CollectionRows::AS_COLLECTION;
+
     public function __construct(
         public readonly object $import,
         public readonly object $sheetImport,
         public readonly string $importId,
         public readonly int $sheetIndex,
         public readonly int $chunkNumber,
+        string $collectionRows = CollectionRows::AS_COLLECTION,
     ) {
+        $this->collectionRows = CollectionRows::assertValid($collectionRows);
         $this->applyJobConfig($sheetImport, $import);
     }
 
@@ -138,7 +147,7 @@ class StagingChunkProcessorJob implements ShouldQueue
             if ($isToArray) {
                 $this->sheetImport->array($buffer);
             } elseif ($isToCollection) {
-                $this->sheetImport->collection(new Collection($buffer));
+                $this->sheetImport->collection(CollectionRows::wrap($buffer, $this->collectionRows));
             }
 
             $bus?->dispatch(new AfterChunk(
