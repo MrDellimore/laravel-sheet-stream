@@ -306,6 +306,15 @@ public function registerEvents(): array
 }
 ```
 
+### Sheet events in multi-sheet exports
+
+`BeforeExport`, `BeforeWriting` and `AfterWriting` are export-scoped: they only go to the top-level export. `BeforeSheet` and `AfterSheet` are sheet-scoped, and a sheet returned from `sheets()` can implement `WithEvents` to receive its own:
+
+- If the sheet registers a listener for the event class, **only the sheet's listener** fires for that sheet.
+- Otherwise the top-level export's listener for that class fires, if it has one.
+
+`BeforeSheet` fires after the sheet has been added to the writer (and after `WithSheetSetup`), `AfterSheet` after its last row; in both the sheet is still the writer's current sheet. A top-level export cannot observe a sheet that registers the same event itself. This is the same rule imports follow; see [Events in multi-sheet imports](imports.md#events-in-multi-sheet-imports).
+
 ---
 
 ## Writer options

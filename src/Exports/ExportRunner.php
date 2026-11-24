@@ -44,10 +44,12 @@ class ExportRunner
 
         foreach ($sheets as $sheetIndex => $sheet) {
             $sheetName = $sheet instanceof WithTitle ? $sheet->title() : null;
+            // Sheet events go to the sub-export's own listeners where it has them.
+            $sheetBus = EventBus::forSheet($bus, $export, $sheet);
             $this->openSheet($sheet, $writer);
-            $bus?->dispatch(new BeforeSheet($sheet, $sheetIndex, $sheetName));
+            $sheetBus?->dispatch(new BeforeSheet($sheet, $sheetIndex, $sheetName));
             $this->writeSheet($sheet, $writer);
-            $bus?->dispatch(new AfterSheet($sheet, $sheetIndex, $sheetName));
+            $sheetBus?->dispatch(new AfterSheet($sheet, $sheetIndex, $sheetName));
         }
 
         $bus?->dispatch(new BeforeWriting($export));

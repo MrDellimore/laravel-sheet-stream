@@ -231,7 +231,7 @@ it('makes a directly constructed runner null blanks unless told otherwise', func
     };
 
     expect($run(new ImportRunner))->toBe(BlankCellsFixtures::keyedRows('openspout', 'xlsx', true))
-        ->and($run(new ImportRunner(1000, 'slug', false)))->toBe(BlankCellsFixtures::keyedRows('openspout', 'xlsx', false));
+        ->and($run(new ImportRunner(blankCellsAsNull: false)))->toBe(BlankCellsFixtures::keyedRows('openspout', 'xlsx', false));
 });
 
 // ── Invalid configuration ────────────────────────────────────────────────────

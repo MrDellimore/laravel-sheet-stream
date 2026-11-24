@@ -13,10 +13,12 @@ use MrDellimore\SheetStream\Concerns\WithReaderOptions;
 use MrDellimore\SheetStream\Engine\EngineFactory;
 use MrDellimore\SheetStream\Events\ImportFailed;
 use MrDellimore\SheetStream\Imports\ImportRunner;
+use MrDellimore\SheetStream\Support\CollectionRows;
 use MrDellimore\SheetStream\Support\ConfiguresFromConcern;
 use MrDellimore\SheetStream\Support\EventBus;
 use MrDellimore\SheetStream\Support\ResolvesTempFile;
 use MrDellimore\SheetStream\Support\RowHelper;
+use MrDellimore\SheetStream\Support\SheetResolver;
 
 class QueuedImportJob implements ShouldQueue
 {
@@ -25,6 +27,12 @@ class QueuedImportJob implements ShouldQueue
     public ?int $tries = null;
 
     public ?int $timeout = null;
+
+    /**
+     * What ToCollection rows are ('collection' or 'array'). Declared with a default, not
+     * promoted, so a job serialized before the setting existed still unserializes with one.
+     */
+    public string $collectionRows = CollectionRows::AS_COLLECTION;
 
     /**
      * null = decide from config when the job runs. Not a promoted property: it needs a real
@@ -39,8 +47,10 @@ class QueuedImportJob implements ShouldQueue
         public array $readerOptions = [],
         public int $batchSize = 1000,
         public string $headingFormatter = 'slug',
+        string $collectionRows = CollectionRows::AS_COLLECTION,
         ?bool $blankCellsAsNull = null,
     ) {
+        $this->collectionRows = CollectionRows::assertValid($collectionRows);
         $this->blankCellsAsNull = $blankCellsAsNull;
         $this->applyJobConfig($import);
     }
@@ -63,7 +73,7 @@ class QueuedImportJob implements ShouldQueue
             $reader->open($localPath);
 
             try {
-                $runner = new ImportRunner($this->batchSize, $this->headingFormatter, $this->blankCellsAsNull());
+                $runner = new ImportRunner($this->batchSize, $this->headingFormatter, collectionRows: $this->collectionRows, blankCellsAsNull: $this->blankCellsAsNull());
                 $runner->run($this->import, $reader, $bus);
             } catch (\Throwable $e) {
                 $bus?->dispatch(new ImportFailed($this->import, $e));
@@ -91,7 +101,7 @@ class QueuedImportJob implements ShouldQueue
                 $sheetMap = $this->import->sheets();
 
                 foreach ($reader->sheets() as $index => $sheetReader) {
-                    $subImport = $sheetMap[$index] ?? $sheetMap[$sheetReader->name()] ?? null;
+                    $subImport = SheetResolver::resolve($this->import, $index, $sheetReader->name(), $sheetMap);
 
                     if ($subImport !== null) {
                         QueuedSheetImportJob::dispatch(
@@ -103,6 +113,7 @@ class QueuedImportJob implements ShouldQueue
                             readerOptions: $this->readerOptions,
                             batchSize: $this->batchSize,
                             headingFormatter: $this->headingFormatter,
+                            collectionRows: $this->collectionRows,
                             blankCellsAsNull: $this->blankCellsAsNull(),
                         );
                     }
