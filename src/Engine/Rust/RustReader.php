@@ -29,8 +29,6 @@ use RustySheet\UnsupportedFormatException;
  * Differences from the OpenSpout driver, all deliberate:
  *  - shared formulas filled down in Excel return their real formula, not "=";
  *  - an unparseable number cell yields null, not 0.0;
- *  - with dates.import_as=serial and no timezone, dates before 1900-03-01 (including
- *    every time-only value) yield their true serial: 18:00 is 0.75, not -0.25.
  *  - with WithCalculatedFormulas, text starting with "=" is kept (OpenSpout turns it into
  *    a formula cell without a value, so the text becomes null);
  *  - corrupt XML throws a RustySheet\ReaderException instead of silently ending the sheet.
