@@ -84,7 +84,7 @@ SheetStream::import(new MyImport, 'file.xlsx')
 The `StagingProducerJob` is the only job that touches the original file. It:
 
 1. Opens the spreadsheet via the configured engine (OpenSpout or PhpSpreadsheet).
-2. Streams through each row, applying heading extraction and empty-row filtering.
+2. Streams through each row, applying heading extraction, empty-row filtering and [`blank_cells`](configuration.md#blank_cells) normalization, so the staged row is exactly what the import later receives.
 3. Pre-computes a **chunk number** for each row: `floor((rowNumber - 1) / chunkSize)`.
 4. Writes rows to the staging storage in batches (configurable via `staging.insert_batch_size`).
 5. After staging all rows, dispatches one `StagingChunkProcessorJob` per chunk.
@@ -274,7 +274,7 @@ The staging pipeline supports all standard import concerns:
 |---|---|---|
 | `ToModel` | Yes | Models are buffered and flushed per chunk |
 | `ToArray` | Yes | `array()` is called once **per chunk**, not once for the entire sheet |
-| `ToCollection` | Yes | `collection()` is called once **per chunk** |
+| `ToCollection` | Yes | `collection()` is called once **per chunk**. Each row is a `Collection`, or a plain array with `collection_rows => 'array'` |
 | `WithHeadingRow` | Yes | Headings extracted by the producer; rows arrive with keys applied |
 | `WithBatchInserts` | Yes | Controls model flush size within each chunk and makes each flush a bulk `INSERT` per model class ([no model events](imports.md#withbatchinserts)) |
 | `SkipsEmptyRows` | Yes | Empty rows filtered by the producer before staging |
@@ -282,6 +282,7 @@ The staging pipeline supports all standard import concerns:
 | `SkipsOnFailure` | Yes | Failures collected per chunk, delivered via `onFailure()` |
 | `WithMultipleSheets` | Yes | Each sheet staged independently, tagged by sheet index |
 | `WithReaderOptions` | Yes | Passed through to the engine in the producer |
+| `WithChunkReading` | Ignored | The pipeline already works in chunks of the `chunk_size` config option; `chunkSize()` is not consulted |
 
 ### Important: ToArray / ToCollection behavior
 
@@ -342,6 +343,31 @@ class WorkbookImport implements WithMultipleSheets, ShouldQueue, UsesStagingTabl
 ```
 
 Sheets not listed in the `sheets()` array are skipped entirely (no rows staged, no consumer jobs dispatched).
+
+The producer calls `sheets()` once per import, so a sheet's events and all of its consumer jobs are given the same sub-import object.
+
+---
+
+## Events
+
+`WithEvents` works in the staging pipeline, with the [same routing as every other import path](imports.md#events-in-multi-sheet-imports): a sub-import's own listener for `BeforeSheet`, `AfterSheet` or `AfterChunk` replaces the parent's for that sheet, and the parent's is used when the sub-import has none.
+
+What differs is *when* and *where* each event is raised:
+
+| Event | Raised by | When |
+|---|---|---|
+| `BeforeImport` | Producer | Before the file is read |
+| `BeforeSheet` | Producer | Before a sheet is staged |
+| `AfterSheet` | Producer | When the sheet has been **staged** and its consumer jobs dispatched |
+| `AfterImport` | Producer | When every sheet has been staged |
+| `AfterChunk` | Consumer | After a chunk's rows have been imported |
+| `ImportFailed` | Producer or consumer | When staging, or a chunk, throws. Parent only |
+
+> **`AfterSheet` does not mean the sheet's rows have been imported.** On a real queue it fires before any of that sheet's chunks have been processed, so none of its rows exist yet and none of its `AfterChunk` events have fired. Put per-chunk work in `AfterChunk`. For work that must run once every row is in, track the chunks yourself (for example count them down in `AfterChunk`); `AfterImport` is not a substitute, because it also fires when staging ends.
+>
+> On the `sync` queue connection consumer jobs run inline as they are dispatched, so there a sheet's chunks are processed *before* its `AfterSheet`. Don't rely on either order.
+
+Consumer jobs run in separate processes, each with its own unserialized copy of the import objects. State a listener sets on the import in one job (a counter, a cached lookup) is not visible in another; keep shared state in the database or cache.
 
 ---
 
