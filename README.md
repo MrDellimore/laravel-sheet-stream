@@ -245,7 +245,7 @@ class ClaimantsExport implements FromQuery, WithHeadings, WithMapping
 | CSV delimiter/encoding options | Yes (`WithReaderOptions` / `WithWriterOptions`) | No | Yes |
 | Date cells on import | Excel serial (default) · `DateTimeImmutable` via `dates.import_as` · string via `WithFormatData` | Same | Excel serial · string via `WithFormatData` |
 
-> **Two engines, one API.** Switch between `openspout` (streaming) and `phpspreadsheet` (full-featured) via config — your import/export classes stay the same. Install the PhpSpreadsheet driver with: `composer require phpoffice/phpspreadsheet`
+> **Three engines, one API.** Switch between `openspout` (streaming), `phpspreadsheet` (full-featured) and `rust` (streaming, many times faster) via config — your import/export classes stay the same. Install the PhpSpreadsheet driver with `composer require phpoffice/phpspreadsheet`, and the rust driver's extension with `pie install "mrdellimore/rusty-sheet:^0.1"` (see [Installation](docs/installation.md#optional-rust-driver)).
 
 ---
 

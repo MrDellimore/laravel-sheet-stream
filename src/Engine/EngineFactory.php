@@ -9,6 +9,8 @@ use MrDellimore\SheetStream\Engine\OpenSpout\OpenSpoutReader;
 use MrDellimore\SheetStream\Engine\OpenSpout\OpenSpoutWriter;
 use MrDellimore\SheetStream\Engine\PhpSpreadsheet\PhpSpreadsheetReader;
 use MrDellimore\SheetStream\Engine\PhpSpreadsheet\PhpSpreadsheetWriter;
+use MrDellimore\SheetStream\Engine\Rust\RustReader;
+use MrDellimore\SheetStream\Engine\Rust\RustWriter;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
 final class EngineFactory
@@ -18,8 +20,9 @@ final class EngineFactory
         return match ($driver) {
             'openspout' => new OpenSpoutReader($options, $nativeOptions),
             'phpspreadsheet' => self::requirePhpSpreadsheet($driver, fn () => new PhpSpreadsheetReader($options)),
+            'rust' => self::requireRustExtension(fn () => new RustReader($options, $nativeOptions)),
             default => throw new InvalidArgumentException(
-                "Unsupported reader driver: {$driver}. Supported drivers: openspout, phpspreadsheet."
+                "Unsupported reader driver: {$driver}. Supported drivers: openspout, phpspreadsheet, rust."
             ),
         };
     }
@@ -34,10 +37,48 @@ final class EngineFactory
                 dateTimeFormat: $options['dates']['datetime_format'] ?? 'yyyy-mm-dd hh:mm:ss',
             ),
             'phpspreadsheet' => self::requirePhpSpreadsheet($driver, fn () => new PhpSpreadsheetWriter($extension)),
+            'rust' => self::requireRustExtension(fn () => new RustWriter(
+                $extension,
+                $nativeOptions,
+                dateFormat: $options['dates']['format'] ?? 'yyyy-mm-dd',
+                dateTimeFormat: $options['dates']['datetime_format'] ?? 'yyyy-mm-dd hh:mm:ss',
+            ), 'writer'),
             default => throw new InvalidArgumentException(
-                "Unsupported writer driver: {$driver}. Supported drivers: openspout, phpspreadsheet."
+                "Unsupported writer driver: {$driver}. Supported drivers: openspout, phpspreadsheet, rust."
             ),
         };
+    }
+
+    /**
+     * The 'rust' driver is explicit: when the extension is missing we fail loudly
+     * instead of silently running at OpenSpout speed.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $factory
+     * @return T
+     */
+    private static function requireRustExtension(callable $factory, string $kind = 'reader'): mixed
+    {
+        $version = RustReader::installedVersion();
+        $install = 'pie install "mrdellimore/rusty-sheet:'.RustReader::SUPPORTED_VERSIONS.'"';
+
+        if ($version === null) {
+            throw new InvalidArgumentException(
+                "The 'rust' {$kind} driver requires the ".RustReader::EXTENSION.' PHP extension, which is not loaded. '
+                ."Install it ({$install}), or set sheet-stream.default_{$kind} to 'openspout'."
+            );
+        }
+
+        if (! RustReader::supportsVersion($version)) {
+            throw new InvalidArgumentException(
+                "The 'rust' {$kind} driver requires ".RustReader::EXTENSION.' '.RustReader::SUPPORTED_VERSIONS
+                ." but version {$version} is loaded. Install a supported version ({$install}), "
+                ."or set sheet-stream.default_{$kind} to 'openspout'."
+            );
+        }
+
+        return $factory();
     }
 
     /**

@@ -42,8 +42,18 @@ The engine driver used for reading spreadsheets.
 |---|---|---|---|---|---|
 | `'openspout'` | Included | Yes | No | Cached values only | Flat |
 | `'phpspreadsheet'` | `composer require phpoffice/phpspreadsheet` | No | Yes | Yes | Grows with file size |
+| `'rust'` | `pie install "mrdellimore/rusty-sheet:^0.1"` ([details](installation.md#optional-rust-driver)) | Yes | No | Cached values only | Flat (plus the shared-string table) |
 
 **Use `'openspout'`** (default) for most imports — it streams rows one at a time with flat memory.
+
+**Use `'rust'`** for large imports. It reads `.xlsx`, `.csv` and `.tsv` through the `rusty_sheet` extension, a streaming reader written in Rust. On a real 86 MB, 396k-row workbook it took 3.4 s, against about 25 minutes for the OpenSpout driver; CSV is about 10× faster. Rows are the same as the OpenSpout driver's, with four fixes:
+
+- shared (filled-down) formulas return their real formula instead of `"="`;
+- an unparseable number cell yields `null` instead of `0.0`;
+- with `WithCalculatedFormulas`, text starting with `=` (such as `=== Totals ===`) is kept, where the OpenSpout driver returns `null`;
+- with `dates.import_as = 'serial'` (and no timezone), dates before 1900-03-01 yield their true serial. This includes every time-only value: 18:00 is `0.75`, where the OpenSpout driver gives `-0.25`.
+
+`WithFormatData` and CSV `WithReaderOptions` (delimiter, enclosure, escape) are supported. Anything the extension doesn't handle yet is read by OpenSpout automatically, per file: `.ods` files, CSV in an encoding other than UTF-8, and `WithReaderOptions` that set `SHOULD_USE_1904_DATES`. If the extension isn't loaded, the `rust` driver throws instead of silently falling back, so a misconfigured server is noticed. With this driver, `WithCsvPreConversion` is no longer needed: reading the XLSX directly is faster than converting it.
 
 **Use `'phpspreadsheet'`** when you need to read `.xls` (legacy binary) files or require formula evaluation. Note: PhpSpreadsheet loads the entire workbook into memory.
 
@@ -58,11 +68,17 @@ You can mix drivers — use `phpspreadsheet` for reading and `openspout` for wri
 
 **Default:** `'openspout'`
 
-The engine driver used for writing spreadsheets. The same two drivers are available.
+The engine driver used for writing spreadsheets: `openspout`, `phpspreadsheet` or `rust`.
 
 **Use `'openspout'`** (default) for most exports — it streams rows directly to disk.
 
 **Use `'phpspreadsheet'`** when you need to write `.xls` format or need PhpSpreadsheet-specific features (cell-level styling, formula writing, etc.).
+
+**Use `'rust'`** for large `.xlsx` and `.csv` exports. It needs the `rusty_sheet` PHP extension, and writes the same files as the OpenSpout driver: the same styles, cell XML and CSV bytes. Writing 400k rows × 20 columns took 3.2 s for XLSX, against 21.7 s with OpenSpout; CSV took 1.6 s against 4.4 s. Your export classes don't change: styles are still OpenSpout `Style` objects, native rows are still OpenSpout `Row`/`Cell` objects, and `WithSheetSetup` still receives an OpenSpout `Sheet`, whose column widths, frozen panes and gridlines are applied.
+
+The XLSX output has two deliberate differences: there is no `<dimension>` element (optional, because rows are streamed straight into the file), and numbers are stored at full precision (OpenSpout keeps 14 significant digits).
+
+Cell borders, hyperlinks (with tooltips), comments, merged cells and data validation (from `XlsxOptions`) and a `WithSheetSetup` autofilter are written like OpenSpout writes them. `.ods` files and other non-default `XlsxOptions` are written by OpenSpout automatically. Features the rust writer can't express raise `UnsupportedByEngine` rather than being dropped: images, rich text, error cells, hidden or outlined rows, and `WithSheetSetup` settings other than column widths, frozen panes, gridlines and the autofilter.
 
 ### `batch_size`
 
