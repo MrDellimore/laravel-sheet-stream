@@ -171,7 +171,7 @@ class ImportRunner
                     $rowsInChunk++;
 
                     if (count($buffer) >= $batchSize) {
-                        RowHelper::flushModels($buffer);
+                        RowHelper::flushModels($buffer, $import);
                         $bus?->dispatch(new AfterChunk($import, $sheetIndex, $chunkNumber, $rowsInChunk));
                         $chunkNumber++;
                         $rowsInChunk = 0;
@@ -197,7 +197,7 @@ class ImportRunner
         if ($isOnEachRow && $rowsInChunk > 0) {
             $bus?->dispatch(new AfterChunk($import, $sheetIndex, $chunkNumber, $rowsInChunk));
         } elseif ($isToModel && $buffer !== []) {
-            RowHelper::flushModels($buffer);
+            RowHelper::flushModels($buffer, $import);
             $bus?->dispatch(new AfterChunk($import, $sheetIndex, $chunkNumber, $rowsInChunk));
         } elseif (! $isToModel && ! $isOnEachRow && $rowsInChunk > 0) {
             $bus?->dispatch(new AfterChunk($import, $sheetIndex, $chunkNumber, $rowsInChunk));

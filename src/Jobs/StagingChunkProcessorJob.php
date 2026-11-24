@@ -113,7 +113,7 @@ class StagingChunkProcessorJob implements ShouldQueue
                         $modelBuffer[] = $model;
 
                         if (count($modelBuffer) >= $batchSize) {
-                            RowHelper::flushModels($modelBuffer);
+                            RowHelper::flushModels($modelBuffer, $this->sheetImport);
                             $modelBuffer = [];
                         }
                     }
@@ -129,7 +129,7 @@ class StagingChunkProcessorJob implements ShouldQueue
             }
 
             if ($isToModel && $modelBuffer !== []) {
-                RowHelper::flushModels($modelBuffer);
+                RowHelper::flushModels($modelBuffer, $this->sheetImport);
             }
 
             if ($skipsOnFailure && $failures !== []) {
