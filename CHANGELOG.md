@@ -9,6 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+This release closes the gaps that kept Laravel Excel `ToCollection` importers from moving over unchanged. Several defaults change to match Laravel Excel; each has a config key or an opt-out where one makes sense. Read **Behaviour changes** before upgrading.
+
+### Behaviour changes
+
+- **`ToCollection` rows are `Illuminate\Support\Collection` instances**, as in Laravel Excel, so `$row->toArray()` and `$row->get('x')` work. Array access, `isset()` and `foreach` are unaffected; `is_array($row)` and `array_*($row)` are not. Set `collection_rows` to `'array'` to keep plain arrays. `ToArray` rows are still arrays.
+- **Blank cells reach the import as `null`**, wherever they sit in the row. Before, a blank inside a row was `''` and only trailing blanks were `null`. Validation now sees `null` too, so a rule such as `'qty' => 'integer'` fails on a blank cell unless it is `nullable`. A cell that explicitly stores an empty string is also `null`. Set `blank_cells` to `''` for the previous behaviour.
+- **`ToModel` + `WithBatchInserts` (batch size above 1) bulk-inserts**: one `INSERT` per model class per batch, as Laravel Excel does. Model events, observers and auditing do not fire for those rows, and the models' keys are not filled in afterwards. Imports without `WithBatchInserts` still `save()` each model. Models that already exist are still updated through `save()`.
+- **A sub-import's own `BeforeSheet` / `AfterSheet` / `AfterChunk` listeners now fire** for its sheet, on every path. When a sub-import registers a listener for one of those events, the parent import's listener for the same event no longer fires for that sheet (Laravel Excel's behaviour). Sheets that register nothing keep receiving the parent's listeners.
+- **Queued paths no longer fire sheet events twice.** With `WithParallelSheets` and in the staging pipeline, parent and sheet listeners both used to run; a staged single-sheet import fired every `AfterChunk` listener twice. Each now fires once. Sub-imports no longer receive `ImportFailed`; only the top-level import does.
+- **Row numbers are the file's own on the `rust` and `phpspreadsheet` readers.** `Failure::row()`, `setRowNumber()` and `setChunkOffset()` used to count yielded rows, so every row below a blank line was numbered low on the `rust` reader. The `openspout` reader (and the files the `rust` reader hands to it) still counts yielded rows.
+- **Date-styled cells before 1900-03-01, including every time-only cell, are no longer a day low** on the `openspout` reader, or on the `rust` reader with `dates.timezone` set: `18:00` is `0.75`, not `-0.25`. `CellNormalizer::dateToSerial()` no longer subtracts a day below serial 61.
+- `SkipsOnFailure` without `WithValidation` is allowed (it never fires) instead of throwing `InvalidConcernCombination`.
+
+### Added
+
+- **`WithChunkReading`** (`chunkSize(): int`). `collection()` / `array()` receive one chunk at a time instead of the whole sheet, so memory stays flat. Per chunk: `onFailure()` → `collection()` / `array()` / the remaining `ToModel` batch → `AfterChunk`. A chunk is N consecutive data rows that survive `SkipsEmptyRows`, counted before validation, so `ceil(rows / chunkSize)` is the exact number of `AfterChunk` events. On a `WithMultipleSheets` import the parent's `chunkSize()` applies to sheets that declare none. In a chunk, `getChunkOffset() + $key` is the row's number. Without the concern nothing changes: one call per sheet, `AfterChunk` per `batchSize`. See [imports](docs/imports.md#chunk-reading).
+- `AfterChunk::$startRow`: the row number of the chunk's first row.
+- `SheetStream::headers($path, $disk)`: the first row of every sheet, keyed by sheet name, without reading the rest of the file. `SheetStream::countRows($import, $path, $disk)`: the number of data rows an import of the file would deliver, per sheet. Both use the configured reader. See [imports](docs/imports.md#inspecting-a-file-before-importing).
+- `EventBus::forSheet()` and `EventBus::SHEET_EVENTS`.
+- Config `formulas_without_cached_value` (`'null'` | `'throw'` | `'formula'`): what a `WithCalculatedFormulas` import receives for a formula the file holds no cached result for. `rust` reader only; `'throw'` and `'formula'` need `rusty_sheet` 0.1.3.
+- Config `collection_rows` and `blank_cells` (see above).
+- `RemembersChunkOffset` and `RemembersRowNumber` work without also implementing `WithChunkOffset` / `WithRowNumber`.
+
+### Changed
+
+- The staging producer calls the import's `sheets()` once per import instead of once per sheet.
+
+### Deprecated
+
+- `EventBus::merge()`. Nothing in the package uses it any more.
+
 ---
 
 ## [1.2.0] — 2026-11-24
@@ -84,7 +115,7 @@ OpenSpout 5 also renames the writer option `DEFAULT_ROW_STYLE` to `FALLBACK_STYL
 
 ### Added
 - `WithFormatData` concern — receive cells as display strings rendered through their number format (Laravel Excel parity). Enables `SHOULD_FORMAT_DATES` on the OpenSpout engine, layered onto any `WithReaderOptions`; uses `NumberFormat::toFormattedString()` on the PhpSpreadsheet engine.
-- `Support\CellNormalizer` — converts `DateTimeInterface` / `DateInterval` cells to 1900-system Excel serials, including the 1900 leap-year quirk for dates before March 1900.
+- `Support\CellNormalizer` — converts `DateTimeInterface` / `DateInterval` cells to 1900-system Excel serials, including the 1900 leap-year quirk for dates before March 1900 (removed in the next release: the quirk made those serials a day low).
 - `dates.import_as` is validated; an unknown value throws `InvalidArgumentException`.
 
 ---
