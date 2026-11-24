@@ -17,6 +17,7 @@ return [
     'temp_path'      => null,
     'collection_rows' => 'collection',
     'blank_cells'    => null,
+    'formulas_without_cached_value' => 'null',
     'dates' => [
         'import_as'       => 'serial',
         'timezone'        => null,
@@ -158,6 +159,29 @@ Any other value (including the string `'null'`) throws an `InvalidArgumentExcept
 ```php
 'blank_cells' => '', // keep the pre-existing behaviour
 ```
+
+
+### `formulas_without_cached_value`
+
+**Default:** `'null'`
+
+What a `WithCalculatedFormulas` import receives for a formula cell whose file holds no cached result. Excel and Google Sheets always save one; files written by generators that never calculate do not, and the streaming readers return cached values rather than evaluating formulas.
+
+| Value | An uncached formula cell is |
+|---|---|
+| `'null'` | `null`, indistinguishable from an empty cell |
+| `'throw'` | an error: the import fails with a `RustySheet\ReaderException` naming the cell (`Sheet1!C3 has a formula with no cached value (=B3+5)`) |
+| `'formula'` | the formula text, e.g. `"=B3+5"` |
+
+A formula whose cached result is an error (`#DIV/0!`, `#N/A`) is `null` in every mode.
+
+Only the `rust` reader can tell an uncached formula from an empty cell, so:
+
+- the `openspout` reader ignores the setting and always yields `null`, and so does the `rust` reader for the files it hands to OpenSpout (`.ods`, non-UTF-8 CSV, a forced 1904 date system);
+- the `phpspreadsheet` reader evaluates formulas itself and is not affected;
+- `'throw'` and `'formula'` need `rusty_sheet` 0.1.3 or newer. On an older extension the import fails with `UnsupportedByEngine` instead of quietly reading `null`.
+
+Imports without `WithCalculatedFormulas` receive every formula as its text, as before. Any other value throws an `InvalidArgumentException` when the import starts or is queued.
 
 ### `dates.import_as`
 

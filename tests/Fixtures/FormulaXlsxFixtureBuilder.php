@@ -6,6 +6,8 @@ namespace MrDellimore\SheetStream\Tests\Fixtures;
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use RuntimeException;
+use ZipArchive;
 
 /**
  * Builds temporary .xlsx fixture files containing formulas.
@@ -64,6 +66,33 @@ class FormulaXlsxFixtureBuilder
         $writer->save($this->path);
 
         $spreadsheet->disconnectWorksheets();
+
+        return $this;
+    }
+
+    /**
+     * The same workbook as build(), with the cached result removed from C3 only — the shape
+     * of a file from a generator that writes formulas it never calculates. C2 and the
+     * totals keep their cached values.
+     */
+    public function buildWithUncachedFormula(): static
+    {
+        $this->build();
+
+        $zip = new ZipArchive;
+        $zip->open($this->path);
+        $entry = 'xl/worksheets/sheet1.xml';
+        $xml = (string) $zip->getFromName($entry);
+        $stripped = preg_replace('~(<c r="C3"[^>]*>\s*<f>[^<]*</f>)\s*<v>[^<]*</v>~', '$1', $xml, 1, $count);
+
+        if ($count !== 1) {
+            $zip->close();
+
+            throw new RuntimeException('Could not strip the cached value from C3.');
+        }
+
+        $zip->addFromString($entry, (string) $stripped);
+        $zip->close();
 
         return $this;
     }

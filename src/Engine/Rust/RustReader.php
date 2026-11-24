@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace MrDellimore\SheetStream\Engine\Rust;
 
+use InvalidArgumentException;
 use LogicException;
 use MrDellimore\SheetStream\Engine\Contracts\Reader;
 use MrDellimore\SheetStream\Engine\Contracts\SheetReader;
 use MrDellimore\SheetStream\Engine\OpenSpout\OpenSpoutReader;
+use MrDellimore\SheetStream\Exceptions\UnsupportedByEngine;
 use MrDellimore\SheetStream\Support\CellNormalizer;
 use OpenSpout\Reader\CSV\Options as CsvOptions;
 use OpenSpout\Reader\XLSX\Options as XlsxOptions;
@@ -49,6 +51,18 @@ final class RustReader implements Reader
     /** Exclusive. */
     public const string MAX_VERSION = '0.2.0';
 
+    /** A formula with no cached value is null: what every extension version does by default. */
+    public const string FORMULA_CACHE_NULL = 'null';
+
+    /** A formula with no cached value fails the import, naming the cell. */
+    public const string FORMULA_CACHE_THROW = 'throw';
+
+    /** A formula with no cached value yields its "=FORMULA" text. */
+    public const string FORMULA_CACHE_FORMULA = 'formula';
+
+    /** First extension version that knows the formulas_without_cached_value option. */
+    public const string FORMULA_CACHE_OPTION_SINCE = '0.1.3';
+
     /** Rows fetched from the extension per call. */
     private const int BATCH_SIZE = 1000;
 
@@ -81,6 +95,23 @@ final class RustReader implements Reader
     {
         return version_compare($version, self::MIN_VERSION, '>=')
             && version_compare($version, self::MAX_VERSION, '<');
+    }
+
+    public static function assertValidFormulaCacheMode(string $mode): string
+    {
+        if (! in_array($mode, [self::FORMULA_CACHE_NULL, self::FORMULA_CACHE_THROW, self::FORMULA_CACHE_FORMULA], true)) {
+            throw new InvalidArgumentException(
+                "Unsupported formulas_without_cached_value value: '{$mode}'. Supported values: null, throw, formula."
+            );
+        }
+
+        return $mode;
+    }
+
+    /** Whether an extension version accepts the formulas_without_cached_value option. */
+    public static function supportsFormulaCacheOption(string $version): bool
+    {
+        return version_compare($version, self::FORMULA_CACHE_OPTION_SINCE, '>=');
     }
 
     public function open(string $path): void
@@ -178,6 +209,14 @@ final class RustReader implements Reader
                 : ['delimiter' => ','],
         ];
 
+        $formulaCacheMode = $this->formulaCacheMode();
+
+        // Extensions before 0.1.3 reject the key, so the default (their only behaviour) is
+        // never sent, and it only means anything with calculated_formulas.
+        if ($formulaCacheMode !== self::FORMULA_CACHE_NULL && $options['calculated_formulas']) {
+            $options['formulas_without_cached_value'] = $formulaCacheMode;
+        }
+
         if ($this->formatsDates()) {
             // Display strings; a timezone has nothing to apply to (as with the OpenSpout driver).
             $options['dates'] = 'formatted';
@@ -195,6 +234,34 @@ final class RustReader implements Reader
         }
 
         return $options;
+    }
+
+    /**
+     * The configured mode, refused up front when the loaded extension is too old to honour
+     * it: silently reading uncached formulas as null is what 'throw' exists to prevent.
+     */
+    private function formulaCacheMode(): string
+    {
+        $mode = self::assertValidFormulaCacheMode(
+            (string) ($this->options['formulasWithoutCachedValue'] ?? self::FORMULA_CACHE_NULL)
+        );
+
+        if ($mode === self::FORMULA_CACHE_NULL || ! ($this->options['calculateFormulas'] ?? false)) {
+            return $mode;
+        }
+
+        $installed = self::installedVersion();
+
+        if ($installed === null || ! self::supportsFormulaCacheOption($installed)) {
+            throw new UnsupportedByEngine(sprintf(
+                "sheet-stream.formulas_without_cached_value = '%s' needs rusty_sheet %s or newer; %s is loaded.",
+                $mode,
+                self::FORMULA_CACHE_OPTION_SINCE,
+                $installed ?? 'no version',
+            ));
+        }
+
+        return $mode;
     }
 
     private function convertsDatesToSerial(): bool

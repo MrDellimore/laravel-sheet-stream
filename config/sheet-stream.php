@@ -26,6 +26,13 @@ return [
     //          trailing cells a short row is padded with (the behaviour before this option).
     // Only an exactly empty cell is blank; 0, '0', false and whitespace-only text are kept.
     'blank_cells' => null,
+    // What a WithCalculatedFormulas import receives for a formula cell whose file holds no cached
+    // result (files written by generators that never calculate). Rust reader only, and it needs
+    // rusty_sheet 0.1.3 or newer for anything but 'null'; the other readers always give null.
+    //   'null'    — null, the same as an empty cell (default)
+    //   'throw'   — fail the import with an exception naming the cell
+    //   'formula' — the formula text, e.g. "=B8*3"
+    'formulas_without_cached_value' => 'null',
     // How date-styled cells reach your import class.
     //   'serial'   — Excel serial number (int/float), Laravel Excel compatible. Convert with
     //                PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject() or your own
