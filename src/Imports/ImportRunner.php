@@ -17,6 +17,7 @@ use MrDellimore\SheetStream\Concerns\WithHeadingRow;
 use MrDellimore\SheetStream\Concerns\WithMultipleSheets;
 use MrDellimore\SheetStream\Concerns\WithRequiredHeadings;
 use MrDellimore\SheetStream\Concerns\WithValidation;
+use MrDellimore\SheetStream\Engine\Contracts\KeysRowsBySourceRow;
 use MrDellimore\SheetStream\Engine\Contracts\Reader;
 use MrDellimore\SheetStream\Engine\Contracts\SheetReader;
 use MrDellimore\SheetStream\Events\AfterChunk;
@@ -97,14 +98,17 @@ class ImportRunner
         $rowsPerChunk = max(1, $chunkSize ?? $batchSize);
 
         $rules = $hasValidation ? $import->rules() : [];
+        $keyedBySourceRow = $sheetReader instanceof KeysRowsBySourceRow;
 
         $headings = null;
         $headingCount = 0;
         $rowNumber = 0;
         $chunk = new ChunkState;
 
-        foreach ($sheetReader->rows() as $rawRow) {
-            $rowNumber++;
+        foreach ($sheetReader->rows() as $key => $rawRow) {
+            // A reader that knows the source row says so; otherwise rows are numbered as they
+            // arrive. max() keeps the numbers ascending whatever a malformed file claims.
+            $rowNumber = $keyedBySourceRow ? max((int) $key, $rowNumber + 1) : $rowNumber + 1;
             $rawRow = array_values($rawRow);
 
             if ($headings === null && $hasHeadingRow) {
@@ -133,7 +137,10 @@ class ImportRunner
             if ($chunked) {
                 // Counted before validation: a failed row still takes its slot, so chunk
                 // boundaries depend on the file alone.
-                $this->startChunk($chunk, $import, $rowNumber);
+                if ($chunk->startRow === null) {
+                    $this->startChunk($chunk, $import, $rowNumber);
+                }
+
                 $chunk->rowCount++;
             }
 
@@ -143,7 +150,9 @@ class ImportRunner
                 $chunk->failures[] = $failure;
             } else {
                 // Without chunk reading a chunk starts at its first valid row.
-                $this->startChunk($chunk, $import, $rowNumber);
+                if ($chunk->startRow === null) {
+                    $this->startChunk($chunk, $import, $rowNumber);
+                }
 
                 if ($remembersRowNumber) {
                     $import->setRowNumber($rowNumber);
@@ -193,16 +202,9 @@ class ImportRunner
         }
     }
 
-    /**
-     * Give the chunk its first row, which is also the import's chunk offset. Does nothing
-     * once the chunk has one.
-     */
+    /** Give the chunk its first row, which is also the import's chunk offset. */
     private function startChunk(ChunkState $chunk, object $import, int $rowNumber): void
     {
-        if ($chunk->startRow !== null) {
-            return;
-        }
-
         $chunk->startRow = $rowNumber;
 
         if (method_exists($import, 'setChunkOffset')) {
