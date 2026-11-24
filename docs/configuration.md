@@ -108,6 +108,8 @@ The number of rows per chunk when using `FromQuery` exports. The query is execut
 
 **Tuning:** Larger chunks reduce the number of database queries but use more memory per chunk. The default of 1000 works well for most cases.
 
+This option does not set the chunk size of a `WithChunkReading` import: that comes from the import's own `chunkSize()` method (see [Chunk reading](imports.md#chunk-reading)).
+
 ### `temp_path`
 
 **Default:** `null` (uses `sys_get_temp_dir()`)

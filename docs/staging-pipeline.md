@@ -282,6 +282,7 @@ The staging pipeline supports all standard import concerns:
 | `SkipsOnFailure` | Yes | Failures collected per chunk, delivered via `onFailure()` |
 | `WithMultipleSheets` | Yes | Each sheet staged independently, tagged by sheet index |
 | `WithReaderOptions` | Yes | Passed through to the engine in the producer |
+| `WithChunkReading` | Ignored | The pipeline already works in chunks of the `chunk_size` config option; `chunkSize()` is not consulted |
 
 ### Important: ToArray / ToCollection behavior
 
