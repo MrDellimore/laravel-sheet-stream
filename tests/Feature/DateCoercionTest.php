@@ -376,9 +376,13 @@ describe('CellNormalizer', function () {
             ->and(CellNormalizer::dateToSerial(new DateTime('2025-06-15 06:00:00')))->toBe(SERIAL_2025_06_15 + 0.25);
     });
 
-    it('reproduces the 1900 leap-year quirk for dates before March 1900', function () {
-        expect(CellNormalizer::dateToSerial(new DateTimeImmutable('1900-01-01')))->toBe(1)
-            ->and(CellNormalizer::dateToSerial(new DateTimeImmutable('1900-02-28')))->toBe(59)
+    it('counts days from 1899-12-30 with no leap-day correction, as the readers do', function () {
+        // OpenSpout turns serial 1 into 1899-12-31 and serial 60 into 1900-02-28 (it has
+        // no 1900-02-29), so those are the dates that must map back to 1 and 60. A real
+        // calendar date in January or February 1900 is therefore one above Excel's serial.
+        expect(CellNormalizer::dateToSerial(new DateTimeImmutable('1899-12-31')))->toBe(1)
+            ->and(CellNormalizer::dateToSerial(new DateTimeImmutable('1900-01-01')))->toBe(2)
+            ->and(CellNormalizer::dateToSerial(new DateTimeImmutable('1900-02-28')))->toBe(60)
             ->and(CellNormalizer::dateToSerial(new DateTimeImmutable('1900-03-01')))->toBe(61);
     });
 

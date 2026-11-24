@@ -48,12 +48,11 @@ The engine driver used for reading spreadsheets.
 
 **Use `'openspout'`** (default) for most imports — it streams rows one at a time with flat memory.
 
-**Use `'rust'`** for large imports. It reads `.xlsx`, `.csv` and `.tsv` through the `rusty_sheet` extension, a streaming reader written in Rust. On a real 86 MB, 396k-row workbook it took 3.4 s, against about 25 minutes for the OpenSpout driver; CSV is about 10× faster. Rows are the same as the OpenSpout driver's, with four fixes:
+**Use `'rust'`** for large imports. It reads `.xlsx`, `.csv` and `.tsv` through the `rusty_sheet` extension, a streaming reader written in Rust. On a real 86 MB, 396k-row workbook it took 3.4 s, against about 25 minutes for the OpenSpout driver; CSV is about 10× faster. Rows are the same as the OpenSpout driver's, with three fixes:
 
 - shared (filled-down) formulas return their real formula instead of `"="`;
 - an unparseable number cell yields `null` instead of `0.0`;
-- with `WithCalculatedFormulas`, text starting with `=` (such as `=== Totals ===`) is kept, where the OpenSpout driver returns `null`;
-- with `dates.import_as = 'serial'` (and no timezone), dates before 1900-03-01 yield their true serial. This includes every time-only value: 18:00 is `0.75`, where the OpenSpout driver gives `-0.25`.
+- with `WithCalculatedFormulas`, text starting with `=` (such as `=== Totals ===`) is kept, where the OpenSpout driver returns `null`.
 
 `WithFormatData` and CSV `WithReaderOptions` (delimiter, enclosure, escape) are supported. Anything the extension doesn't handle yet is read by OpenSpout automatically, per file: `.ods` files, CSV in an encoding other than UTF-8, and `WithReaderOptions` that set `SHOULD_USE_1904_DATES`. If the extension isn't loaded, the `rust` driver throws instead of silently falling back, so a misconfigured server is noticed. With this driver, `WithCsvPreConversion` is no longer needed: reading the XLSX directly is faster than converting it.
 
@@ -171,7 +170,10 @@ How a date-styled cell reaches your import class.
 | `'serial'` | `46281` (int, or float when the cell has a time part) | Laravel Excel compatible. Convert with `PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject()` or your own helper. |
 | `'datetime'` | `DateTimeImmutable` | Converted to `dates.timezone` when set. |
 
-Serials are always emitted in the 1900 date system, so `excelToDateTimeObject()` needs no calendar switch even for workbooks saved with the 1904 system.
+The serial is the number stored in the cell, on every driver: a time-only cell is a fraction of a day (`18:00` is `0.75`), and dates before 1900-03-01 keep their stored serial too (`1` for the cell Excel shows as 1900-01-01, `60` for its nonexistent 1900-02-29). Two exceptions on the `openspout` and `rust` drivers, which rebuild the serial from a date:
+
+- the time part is rounded to the nearest second;
+- serials are always emitted in the 1900 date system, so `excelToDateTimeObject()` needs no calendar switch even for workbooks saved with the 1904 system (a cell storing `0.75` in such a workbook arrives as `1462.75`).
 
 To receive the string a spreadsheet application would display instead (e.g. `"09/16/2026"`), implement the [`WithFormatData`](imports.md#withformatdata) concern on the import; it overrides this setting for that import.
 
@@ -180,6 +182,8 @@ To receive the string a spreadsheet application would display instead (e.g. `"09
 **Default:** `null`
 
 When set to a timezone string (e.g. `'America/New_York'`), date values read from spreadsheets are converted to this timezone before being returned (in `datetime` mode) or converted to a serial (in `serial` mode, the serial reflects the local wall-clock time). When `null`, no timezone conversion is applied.
+
+Spreadsheet dates carry no timezone, so the readers take them to be in PHP's default timezone. A `dates.timezone` different from that one therefore shifts every date-styled cell by the difference between the two, time-only cells included (with PHP on UTC and `'America/New_York'`, `18:00` arrives as 13:00, serial `0.5417`). Leave it `null`, or equal to the application timezone, to get the stored serial. The `phpspreadsheet` driver ignores this setting in `serial` mode.
 
 ---
 

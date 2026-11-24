@@ -256,7 +256,7 @@ it('still rejects .xls like the OpenSpout driver', function () {
     }
 });
 
-it('returns the true serial for time-only cells, where the OpenSpout driver is a day off', function () {
+it('returns the true serial for time-only cells, as the OpenSpout driver does', function () {
     $path = sys_get_temp_dir().'/'.uniqid('rust_time_', true).'.xlsx';
     $writer = new Writer;
     $writer->openToFile($path);
@@ -270,10 +270,10 @@ it('returns the true serial for time-only cells, where the OpenSpout driver is a
         $rust = readAllSheets(new RustReader, $path);
         $openspout = readAllSheets(new OpenSpoutReader, $path);
 
-        // CellNormalizer::dateToSerial() subtracts a leap day OpenSpout never added,
-        // so every value before 1900-03-01, including every time of day, comes out a day early.
+        // The OpenSpout driver used to give -0.25 here: CellNormalizer::dateToSerial()
+        // subtracted a leap day OpenSpout never added from every value before 1900-03-01.
         expect($rust['Sheet1'][0][1])->toBe('float(0.75)')
-            ->and($openspout['Sheet1'][0][1])->toBe('float(-0.25)');
+            ->and($openspout['Sheet1'][0][1])->toBe('float(0.75)');
     } finally {
         @unlink($path);
     }
