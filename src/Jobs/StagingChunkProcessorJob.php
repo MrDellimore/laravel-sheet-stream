@@ -16,8 +16,6 @@ use MrDellimore\SheetStream\Concerns\ToArray;
 use MrDellimore\SheetStream\Concerns\ToCollection;
 use MrDellimore\SheetStream\Concerns\ToModel;
 use MrDellimore\SheetStream\Concerns\WithBatchInserts;
-use MrDellimore\SheetStream\Concerns\WithChunkOffset;
-use MrDellimore\SheetStream\Concerns\WithRowNumber;
 use MrDellimore\SheetStream\Concerns\WithValidation;
 use MrDellimore\SheetStream\Events\AfterChunk;
 use MrDellimore\SheetStream\Events\ImportFailed;
@@ -69,8 +67,9 @@ class StagingChunkProcessorJob implements ShouldQueue
             : $rows->count();
         $rules = $hasValidation ? $this->sheetImport->rules() : [];
 
-        $remembersRowNumber = $this->sheetImport instanceof WithRowNumber;
-        $remembersChunkOffset = $this->sheetImport instanceof WithChunkOffset;
+        // Detected by name, as in ImportRunner: the Remembers* traits need no paired interface.
+        $remembersRowNumber = method_exists($this->sheetImport, 'setRowNumber');
+        $remembersChunkOffset = method_exists($this->sheetImport, 'setChunkOffset');
 
         $buffer = [];
         $modelBuffer = [];
