@@ -60,10 +60,21 @@ final class EngineFactory
      */
     private static function requireRustExtension(callable $factory, string $kind = 'reader'): mixed
     {
-        if (! RustReader::isAvailable()) {
+        $version = RustReader::installedVersion();
+        $install = 'pie install "mrdellimore/rusty-sheet:'.RustReader::SUPPORTED_VERSIONS.'"';
+
+        if ($version === null) {
             throw new InvalidArgumentException(
                 "The 'rust' {$kind} driver requires the ".RustReader::EXTENSION.' PHP extension, which is not loaded. '
-                ."Install it, or set sheet-stream.default_{$kind} to 'openspout'."
+                ."Install it ({$install}), or set sheet-stream.default_{$kind} to 'openspout'."
+            );
+        }
+
+        if (! RustReader::supportsVersion($version)) {
+            throw new InvalidArgumentException(
+                "The 'rust' {$kind} driver requires ".RustReader::EXTENSION.' '.RustReader::SUPPORTED_VERSIONS
+                ." but version {$version} is loaded. Install a supported version ({$install}), "
+                ."or set sheet-stream.default_{$kind} to 'openspout'."
             );
         }
 

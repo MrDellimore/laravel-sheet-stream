@@ -62,6 +62,33 @@ You can also mix drivers — for example, use `phpspreadsheet` only for reading 
 
 See [Configuration](configuration.md) for details on when to use each driver.
 
+## Optional: rust driver
+
+For large `.xlsx` and `.csv` imports and exports, the `rust` driver is many times faster than OpenSpout, with flat memory. It needs the [`rusty_sheet`](https://github.com/MrDellimore/rusty-php-sheet) PHP extension (PHP 8.4 or 8.5). On Linux (x86_64 and arm64, glibc and musl/Alpine), install it with [PIE](https://github.com/php/pie), which downloads a prebuilt binary and enables it. On macOS, [build it from source](https://github.com/MrDellimore/rusty-php-sheet#install).
+
+```bash
+pie install "mrdellimore/rusty-sheet:^0.1"
+php -m | grep rusty_sheet   # check it loads
+```
+
+Install it for every PHP that runs your app: the CLI, PHP-FPM, and your queue workers. If you have more than one PHP, pick the right one with `pie install "mrdellimore/rusty-sheet:^0.1" --with-php-path="$(which php)"`. Then set the driver:
+
+```php
+// config/sheet-stream.php
+'default_reader' => 'rust',
+'default_writer' => 'rust',
+```
+
+If the extension isn't loaded, or its version isn't one this package supports (currently `^0.1`, i.e. 0.1.x), the `rust` driver throws rather than silently falling back to OpenSpout.
+
+The extension is upgraded separately from Composer: `composer update` never touches it. Re-run the `pie install "mrdellimore/rusty-sheet:^0.1"` command above (for example in your Dockerfile or deploy script) to pick up the newest compatible release; the constraint keeps out versions that could break this package. To have Composer refuse to install on a server without a compatible extension, add it to your app's `composer.json`:
+
+```json
+"require": {
+    "ext-rusty_sheet": "^0.1"
+}
+```
+
 ## Using without auto-discovery
 
 If you have disabled auto-discovery, add the provider and alias manually in your `bootstrap/providers.php` or `config/app.php`:

@@ -39,6 +39,18 @@ final class RustReader implements Reader
 {
     public const string EXTENSION = 'rusty_sheet';
 
+    /**
+     * Extension versions these drivers work with, as a Composer constraint and the
+     * equivalent bounds. While rusty_sheet is 0.x a minor release may break its API, so
+     * ^0.1 means 0.1.x only. Widen both when a new extension version has been tested.
+     */
+    public const string SUPPORTED_VERSIONS = '^0.1';
+
+    public const string MIN_VERSION = '0.1.0';
+
+    /** Exclusive. */
+    public const string MAX_VERSION = '0.2.0';
+
     /** Rows fetched from the extension per call. */
     private const int BATCH_SIZE = 1000;
 
@@ -51,9 +63,26 @@ final class RustReader implements Reader
         private readonly ?object $nativeOptions = null,
     ) {}
 
+    /** Whether the extension is loaded and its version is one these drivers support. */
     public static function isAvailable(): bool
     {
-        return extension_loaded(self::EXTENSION);
+        $version = self::installedVersion();
+
+        return $version !== null && self::supportsVersion($version);
+    }
+
+    /** The loaded extension's version, or null when it isn't loaded. */
+    public static function installedVersion(): ?string
+    {
+        $version = extension_loaded(self::EXTENSION) ? phpversion(self::EXTENSION) : false;
+
+        return $version === false ? null : $version;
+    }
+
+    public static function supportsVersion(string $version): bool
+    {
+        return version_compare($version, self::MIN_VERSION, '>=')
+            && version_compare($version, self::MAX_VERSION, '<');
     }
 
     public function open(string $path): void

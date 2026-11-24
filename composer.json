@@ -24,7 +24,8 @@
         "rector/rector": "^2.6"
     },
     "suggest": {
-        "phpoffice/phpspreadsheet": "Required for the phpspreadsheet engine driver (.xls support, formula evaluation, charts)"
+        "phpoffice/phpspreadsheet": "Required for the phpspreadsheet engine driver (.xls support, formula evaluation, charts)",
+        "ext-rusty_sheet": "^0.1, required for the rust engine driver (fast streaming XLSX/CSV). Install with: pie install \"mrdellimore/rusty-sheet:^0.1\""
     },
     "autoload": {
         "psr-4": { "MrDellimore\\SheetStream\\": "src/" }
