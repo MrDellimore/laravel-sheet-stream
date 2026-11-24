@@ -651,6 +651,53 @@ The same rule applies on every path: synchronous imports, `ShouldQueue`, `WithPa
 
 ---
 
+## Inspecting a file before importing
+
+Two helpers read a file through the configured reader driver (`sheet-stream.default_reader`) without running an import. Both take a filesystem disk as their last path argument exactly like `import()`: the file is streamed to a temp copy, which is removed again whether the call returns or throws.
+
+### SheetStream::headers()
+
+Returns the first row of every sheet, keyed by sheet name in workbook order. Only that row is read from each sheet, so this is the cheap way to validate an upload's columns before dispatching its import.
+
+```php
+$headers = SheetStream::headers($path);          // or SheetStream::headers('imports/users.xlsx', 's3')
+// ['Users' => ['First Name', 'E-mail Address'], 'Orders' => ['Order ID', 'Total'], 'Notes' => []]
+
+$headers = SheetStream::headers($path, formatted: true);
+// ['Users' => ['first_name', 'e_mail_address'], 'Orders' => ['order_id', 'total'], 'Notes' => []]
+```
+
+- **Raw or formatted.** By default you get the cell values as the driver reads them. `formatted: true` returns them as `WithHeadingRow` keys a row, using `sheet-stream.heading_formatter`.
+- **Row 1 is the header, even when it is blank.** Empty rows are preserved for this read, so a sheet whose first row is blank gives `[]` rather than promoting the first row that has data. (An import, by contrast, takes the first row the reader yields as the heading row; the streaming drivers skip leading blank rows unless the import preserves them via `WithReaderOptions`.)
+- **Every sheet has an entry.** An empty sheet gives `[]` too, so `array_values($headers)[$sheetIndex]` lines up with the workbook's sheet order. Use `array_filter($headers)` to keep only sheets that have a header.
+- **Trailing blank cells are removed; blanks between headings stay** (as `''`, or `null` on the `phpspreadsheet` driver), so a column's position in the array is its position in the sheet.
+- **CSV** files are a single sheet. Its name depends on the driver (`''`, or `Worksheet` on `phpspreadsheet`), so read it with `reset($headers)`. The file is parsed with the default CSV settings (comma-delimited, UTF-8).
+- The `phpspreadsheet` driver loads the whole workbook whatever you ask of it, and OpenSpout parses an XLSX file's shared-strings table when it opens the file. Only the `rust` driver makes this genuinely independent of file size.
+
+### SheetStream::countRows()
+
+Returns how many rows importing the file would hand to your import class, per sheet the import processes, keyed by sheet name in workbook order. Use it to prime a progress bar before the import runs:
+
+```php
+$counts = SheetStream::countRows(new WorkbookImport, $path);   // ['Users' => 12500, 'Orders' => 0]
+
+$totalRows = array_sum($counts);
+$totalChunks = array_sum(array_map(fn (int $rows) => (int) ceil($rows / $chunkSize), $counts));
+```
+
+The count follows the import you pass, sheet by sheet:
+
+- Sheets are resolved as an import resolves them: only the first sheet without `WithMultipleSheets`; with it, the sheets mapped by index or by name. Unmapped sheets have no entry, and neither does a mapped name the workbook doesn't contain.
+- The heading row is not counted when the sheet's import uses `WithHeadingRow`.
+- Rows that `SkipsEmptyRows` drops are not counted when the sheet's import uses it.
+- The file is read with the import's own reader settings (`WithReaderOptions`, `WithCalculatedFormulas`, `WithFormatData`), so the rows counted are the rows imported.
+
+That makes the result the number of rows that reach validation; rows that then fail `WithValidation` are still counted. The import itself is never run: apart from one `sheets()` call (and `readerOptions()`), none of its methods are called and no events fire, and a `ShouldQueue` import is counted synchronously rather than dispatched.
+
+`countRows()` streams each counted sheet once, so it costs about as much as reading the file (seconds on the `rust` driver, considerably longer for a large workbook on `openspout`).
+
+---
+
 ## How the import pipeline works
 
 The `ImportRunner` processes each sheet in a streaming loop:
