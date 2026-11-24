@@ -212,8 +212,7 @@ class StagingProducerJob implements ShouldQueue
     ): int {
         $hasHeadingRow = $subImport instanceof WithHeadingRow;
         $skipsEmpty = $subImport instanceof SkipsEmptyRows;
-        $blankCellsAsNull = $this->blankCellsAsNull
-            ?? RowHelper::blankCellsAsNull(config('sheet-stream.blank_cells'));
+        $blankCellsAsNull = $this->resolvedBlankCellsAsNull();
         $now = now()->toDateTimeString();
 
         $headings = null;

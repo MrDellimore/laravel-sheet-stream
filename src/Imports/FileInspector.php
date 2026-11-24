@@ -118,10 +118,6 @@ final readonly class FileInspector
     /**
      * Mirrors ImportRunner's row loop up to the point a row reaches validation: the first
      * row the reader yields is the heading, and SkipsEmptyRows drops blank rows after it.
-     *
-     * Every driver streams the sheet for now. A reader that learns to count natively
-     * (rusty_sheet's planned Reader::rowCount()) slots in here, for sheets without
-     * SkipsEmptyRows only: which rows are blank can't be known without reading the cells.
      */
     private function countSheetRows(SheetReader $sheetReader, bool $hasHeadingRow, bool $skipsEmptyRows): int
     {
